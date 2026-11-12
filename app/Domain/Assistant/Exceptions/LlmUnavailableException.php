@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Assistant\Exceptions;
+
+use RuntimeException;
+
+final class LlmUnavailableException extends RuntimeException
+{
+    public function __construct()
+    {
+        parent::__construct('El modelo local no está disponible.');
+    }
+}
