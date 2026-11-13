@@ -22,6 +22,12 @@ return [
         'timeout' => (int) env('OLLAMA_TIMEOUT', 120),
     ],
 
+    'tesseract' => [
+        'binary' => env('TESSERACT_BINARY', ''),
+        'tessdata' => env('TESSERACT_TESSDATA', ''),
+        'languages' => env('TESSERACT_LANGS', 'spa+eng'),
+    ],
+
     'policies' => [
         'external_egress' => true,
         'prompt_injection' => true,
