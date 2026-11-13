@@ -83,13 +83,14 @@ final class EloquentConversationRepository implements ConversationRepository
             ->all();
     }
 
-    public function append(string $id, MessageRole $role, string $content, ?DevelopmentTask $task): void
+    public function append(string $id, MessageRole $role, string $content, ?DevelopmentTask $task, ?string $imagePath = null): void
     {
         Message::query()->create([
             'conversation_id' => $id,
             'role' => $role->value,
             'task' => $task?->value,
             'content' => $content,
+            'image_path' => $imagePath,
         ]);
 
         Conversation::query()->whereKey($id)->update([
@@ -97,11 +98,30 @@ final class EloquentConversationRepository implements ConversationRepository
         ]);
     }
 
+    public function imagePath(string $conversationId, string $messageId): ?string
+    {
+        $path = Message::query()
+            ->where('conversation_id', $conversationId)
+            ->whereKey($messageId)
+            ->value('image_path');
+
+        return is_string($path) && $path !== '' ? $path : null;
+    }
+
+    public function holdsImage(string $relativePath): bool
+    {
+        return Message::query()->where('image_path', $relativePath)->exists();
+    }
+
     private function stored(Message $message): StoredMessage
     {
+        $path = $message->getAttribute('image_path');
+
         return new StoredMessage(
             MessageRole::from((string) $message->getAttribute('role')),
             (string) $message->getAttribute('content'),
+            (string) $message->getKey(),
+            is_string($path) && $path !== '',
         );
     }
 

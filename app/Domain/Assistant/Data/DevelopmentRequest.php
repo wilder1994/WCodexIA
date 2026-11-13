@@ -19,5 +19,7 @@ final readonly class DevelopmentRequest
         public array $paths,
         public ?string $language,
         public array $contextIds = [],
+        public ?string $imagePath = null,
+        public ?string $imageText = null,
     ) {}
 }

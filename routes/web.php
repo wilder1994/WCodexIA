@@ -11,6 +11,10 @@ Route::post('/c', [ChatController::class, 'store'])->name('chat.store');
 Route::get('/c/{conversation}', [ChatController::class, 'show'])
     ->whereUuid('conversation')
     ->name('chat.show');
+Route::get('/c/{conversation}/m/{message}', [ChatController::class, 'image'])
+    ->whereUuid('conversation')
+    ->whereUuid('message')
+    ->name('chat.image');
 
 Route::get('/agent', [AgentController::class, 'index'])->name('agent.index');
 Route::post('/agent', [AgentController::class, 'propose'])->name('agent.propose');

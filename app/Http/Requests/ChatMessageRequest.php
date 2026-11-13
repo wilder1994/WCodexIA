@@ -23,6 +23,7 @@ final class ChatMessageRequest extends FormRequest
             'context_ids' => ['sometimes', 'array', 'max:3'],
             'context_ids.*' => ['uuid', 'distinct', 'exists:conversations,id'],
             'prompt' => ['required', 'string', 'min:1', 'max:8000'],
+            'image' => ['nullable', 'file', 'image', 'mimes:jpeg,png,webp,gif', 'max:2048'],
         ];
     }
 }

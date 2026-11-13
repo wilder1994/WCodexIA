@@ -11,5 +11,7 @@ final readonly class StoredMessage
     public function __construct(
         public MessageRole $role,
         public string $content,
+        public ?string $id = null,
+        public bool $hasImage = false,
     ) {}
 }

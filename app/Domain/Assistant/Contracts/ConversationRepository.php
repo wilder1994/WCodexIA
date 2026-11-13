@@ -30,5 +30,9 @@ interface ConversationRepository
      */
     public function recent(string $id, int $limit): array;
 
-    public function append(string $id, MessageRole $role, string $content, ?DevelopmentTask $task): void;
+    public function append(string $id, MessageRole $role, string $content, ?DevelopmentTask $task, ?string $imagePath = null): void;
+
+    public function imagePath(string $conversationId, string $messageId): ?string;
+
+    public function holdsImage(string $relativePath): bool;
 }

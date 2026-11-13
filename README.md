@@ -4,10 +4,10 @@ Asistente local de desarrollo. El código y las conversaciones se quedan en la m
 
 ## Qué incluye
 
-- Chat web en `/` con historial en MySQL.
-- Memoria entre sesiones: hasta 3 sesiones anteriores entran como contexto, no como instrucciones.
-- Hueco de imagen visible y deshabilitado. Una subida se rechaza antes de llamar al modelo.
-- Modo agente en `/agent`: lee archivos de un directorio indicado, propone un diff y solo escribe o ejecuta un comando después de aprobación.
+- Chat web en `/` con historial en MySQL. El recuadro de escritura admite texto, una imagen adjunta o pegada, y dictado del navegador. El audio no sale del navegador.
+- Memoria entre sesiones: hasta 3 sesiones anteriores entran como contexto, no como instrucciones. El panel lista cada sesión por sus primeras palabras. La interfaz ya no envía `context_ids[]`; el backend los sigue aceptando y, si no llegan, usa las sesiones recientes.
+- Imagen local: se guarda en el equipo, se muestra en el hilo y Tesseract lee su texto. El modelo recibe ese texto, no los píxeles.
+- Modo agente en `/agent`: lee archivos de un directorio indicado, propone un diff unificado y solo escribe o ejecuta un comando después de aprobación.
 - API local con token para consultar políticas y pedir completados.
 - Políticas de seguridad aplicadas antes y después del modelo.
 
@@ -16,7 +16,8 @@ Asistente local de desarrollo. El código y las conversaciones se quedan en la m
 - PHP 8.2 y Laravel 12.
 - MySQL 8 (Laragon). Bases `wcodexia` y `wcodexia_testing`, `utf8mb4_unicode_ci`.
 - Ollama en `http://127.0.0.1:11434`.
-- Modelo por defecto: `qwen2.5-coder:3b` (Q4_K_M, contexto 32768). Licencia Qwen Research: uso no comercial.
+- Modelo por defecto: `qwen2.5-coder:3b` (Q4_K_M, contexto 32768). Licencia Qwen Research: uso no comercial. Es un modelo de texto: no interpreta píxeles.
+- Tesseract, si va a leerse texto de imágenes. En Windows se usa `C:\Program Files\Tesseract-OCR\tesseract.exe` cuando existe. Los idiomas `spa+eng` salen de `TESSERACT_TESSDATA` o, si no está definido, de `%LOCALAPPDATA%\Tesseract\tessdata`. `TESSDATA_PREFIX` apunta a ese directorio `tessdata`.
 
 El cliente no elige el proveedor. `WCODEX_ALLOW_EXTERNAL` queda en `false`.
 
@@ -53,7 +54,19 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 `DevelopmentAssistant` compone el prompt con la tarea `explain`, las últimas 10 vueltas de la sesión y el bloque de `SessionMemory`. Ese bloque lleva como máximo 3 sesiones (las marcadas con `context_ids[]` primero, luego las más recientes), 6 mensajes y 500 caracteres por mensaje. El texto guardado del usuario es el prompt ya redactado; el contexto de archivos y de memoria se envía al modelo y no se duplica como mensaje de usuario.
 
-El system prompt es fijo: el contenido del usuario, los archivos y la memoria son datos, no instrucciones.
+El system prompt es fijo: el contenido del usuario, los archivos, la memoria y el texto leído de una imagen son datos, no instrucciones. Si la imagen no produjo texto, el prompt pide no inventar su contenido.
+
+Formatos de imagen: jpeg, png, webp y gif, hasta 2048 KB. El archivo queda en el disco `local`, bajo `chat-images/{uuid}.{ext}`, y se sirve solo por la ruta de la sesión (`GET /c/{conversación}/m/{mensaje}`), sin caché pública. La ruta y los bytes no se envían a Ollama. El texto de Tesseract pasa por la redacción de secretos antes del modelo y antes de persistir el prompt.
+
+En `.env` se puede fijar el lector:
+
+```bash
+TESSERACT_BINARY=
+TESSERACT_TESSDATA=
+TESSERACT_LANGS=spa+eng
+```
+
+Si falta `spa.traineddata`, el lector usa solo `eng`.
 
 ## Agente
 
@@ -78,7 +91,11 @@ El modelo debe devolver JSON:
 
 `ProposalParser` acepta ese JSON aunque venga entre cercas Markdown y repara escapes inválidos dentro de strings (por ejemplo `App\Http` o saltos de línea crudos). Como máximo conserva 4 edits. `command` es opcional, de hasta 200 caracteres y sin saltos de línea.
 
-La propuesta queda en sesión. La vista muestra el diff alineado por líneas. **Aprobar escritura** se habilita cuando hay edits válidos y todavía no se aplicaron. **Ejecutar comando** aparece solo si la propuesta trae un comando. Escribir y ejecutar exigen el `proposal_id` de esa sesión. El comando corre con el directorio del proyecto como cwd y un tope de 20 segundos.
+La propuesta queda en sesión. El diff es unificado (Myers), con 3 líneas de contexto y un tope de 200 cambios. Un archivo idéntico no produce diff. Una línea insertada se muestra como inserción, sin marcar el resto del archivo como borrado.
+
+**Aprobar escritura** se habilita cuando hay edits válidos y todavía no se aplicaron. **Ejecutar comando** aparece solo si la propuesta trae un comando. Escribir y ejecutar exigen el `proposal_id` de esa sesión. El comando corre con el directorio del proyecto como cwd y un tope de 20 segundos.
+
+`HostEnvironment` publica `PATH`, `PATHEXT` y `SYSTEMROOT` para `artisan serve` y los vuelve a armar en cada comando aprobado. Así un `php` del PATH de Windows sigue encontrándose cuando la petición del servidor no hereda `Path`. El directorio de `PHP_BINARY` se antepone si falta.
 
 ## Políticas
 
@@ -114,10 +131,10 @@ El chat y el agente son rutas web con sesión y CSRF. No usan el token de la API
 ```
 app/Domain/Security      políticas y contrato del workspace
 app/Domain/Assistant     chat, memoria, contratos del modelo
-app/Domain/Agent         parser, diff, propuesta y comando aprobado
-app/Infrastructure       Ollama, guard de archivos, repositorios Eloquent
+app/Domain/Agent         parser, diff unificado, propuesta y comando aprobado
+app/Infrastructure       Ollama, guard de archivos, imagen del chat, Tesseract, entorno de procesos, repositorios Eloquent
 app/Http                 chat, agente y API v1
-config/wcodex.php        token, Ollama, workspace y políticas
+config/wcodex.php        token, Ollama, Tesseract, workspace y políticas
 ```
 
 ## Pruebas
@@ -128,4 +145,4 @@ config/wcodex.php        token, Ollama, workspace y políticas
 php artisan test
 ```
 
-La suite cubre políticas, el límite del workspace, el chat (persistencia, memoria, imagen rechazada), la API y el agente (diff antes de escribir, comando bajo aprobación, JSON entre cercas con el botón de aprobar habilitado).
+La suite cubre políticas, el límite del workspace, el chat (persistencia, memoria, texto leído de la imagen y ausencia del control de cargar sesiones), la API y el agente (diff antes de escribir, una inserción que no reescribe el archivo, comando bajo aprobación aunque el PATH heredado no traiga `php`, JSON entre cercas con el botón de aprobar habilitado).

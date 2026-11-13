@@ -125,4 +125,110 @@ TXT;
         $page->assertSee('Ejecutar comando');
         $page->assertDontSee('type="submit" disabled', false);
     }
+
+    public function test_an_inserted_comment_renders_only_that_line_as_added(): void
+    {
+        $before = <<<'PHP'
+<?php
+
+namespace App\Http\Controllers;
+
+abstract class Controller
+{
+    //
+}
+
+PHP;
+        $after = <<<'PHP'
+<?php
+
+// Agente en revisión.
+
+namespace App\Http\Controllers;
+
+abstract class Controller
+{
+    //
+}
+
+PHP;
+        file_put_contents($this->root.DIRECTORY_SEPARATOR.'Note.php', $before);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'http://127.0.0.1:11434/*' => Http::response([
+                'message' => [
+                    'content' => json_encode([
+                        'summary' => 'Agrega el comentario.',
+                        'edits' => [
+                            ['path' => 'Note.php', 'content' => $after],
+                        ],
+                        'command' => null,
+                    ], JSON_UNESCAPED_SLASHES),
+                ],
+            ]),
+        ]);
+
+        $this->post('/agent', [
+            'project' => $this->root,
+            'paths' => 'Note.php',
+            'instruction' => 'Agrega el comentario.',
+        ])->assertRedirect('/agent');
+
+        $page = $this->get('/agent');
+        $page->assertOk();
+        $page->assertSee('+// Agente en revisión.', false);
+        $page->assertDontSee('-namespace App\\Http\\Controllers;', false);
+        $page->assertDontSee('-abstract class Controller', false);
+        $page->assertSee('Aprobar escritura');
+    }
+
+    public function test_a_bare_php_command_uses_the_application_binary(): void
+    {
+        $proposal = json_encode([
+            'summary' => 'Solo el comando.',
+            'edits' => [],
+            'command' => 'php -r "echo \'path-ok\';"',
+        ], JSON_UNESCAPED_SLASHES);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'http://127.0.0.1:11434/*' => Http::response([
+                'message' => ['content' => $proposal],
+            ]),
+        ]);
+
+        $this->post('/agent', [
+            'project' => $this->root,
+            'paths' => 'Note.php',
+            'instruction' => 'No cambies el archivo.',
+        ])->assertRedirect('/agent');
+
+        $pathKey = 'PATH';
+        $original = false;
+
+        foreach (getenv() as $key => $value) {
+            if (is_string($key) && strcasecmp($key, 'PATH') === 0) {
+                $pathKey = $key;
+                $original = $value;
+            }
+        }
+
+        putenv($pathKey.'=C:\\Windows\\System32');
+
+        try {
+            $this->post('/agent/run', [
+                'proposal_id' => (string) session('agent.proposal.id'),
+            ])->assertRedirect('/agent');
+        } finally {
+            if (is_string($original)) {
+                putenv($pathKey.'='.$original);
+            }
+        }
+
+        $this->get('/agent')
+            ->assertOk()
+            ->assertSee('path-ok')
+            ->assertSee('exit 0');
+    }
 }

@@ -6,6 +6,7 @@ namespace App\Domain\Agent\Services;
 
 use App\Domain\Agent\Data\CommandResult;
 use App\Domain\Security\Exceptions\WorkspaceBoundaryException;
+use App\Infrastructure\Process\HostEnvironment;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
@@ -30,7 +31,7 @@ final readonly class ApprovedCommandRunner
             );
         }
 
-        $process = Process::fromShellCommandline($command, $rootReal, null, null, 20);
+        $process = Process::fromShellCommandline($command, $rootReal, (new HostEnvironment)->forCommand(), null, 20);
 
         try {
             $process->run();

@@ -14,7 +14,7 @@ final class ChatPageTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_chat_shows_a_disabled_image_slot(): void
+    public function test_the_chat_shows_an_enabled_image_slot(): void
     {
         Http::fake([
             'http://127.0.0.1:11434/*' => Http::response(['models' => []], 200),
@@ -24,8 +24,10 @@ final class ChatPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('name="image"', false);
-        $response->assertSee('disabled', false);
-        $response->assertSee('Espacio de imagen reservado', false);
+        $response->assertSee('accept="image/jpeg,image/png,image/webp,image/gif"', false);
+        $response->assertSee('aria-label="Adjuntar imagen"', false);
+        $response->assertSee('aria-label="Dictar"', false);
+        $response->assertSee('La imagen se guarda en este equipo. El modelo recibe el texto leído', false);
         $response->assertSee('El modelo todavía no está cargado', false);
     }
 
@@ -111,22 +113,90 @@ final class ChatPageTest extends TestCase
 
         $this->get('/')
             ->assertOk()
-            ->assertSee('name="context_ids[]"', false)
-            ->assertSee('Cargar', false);
+            ->assertSee('Marca alfa para el repositorio de pedidos.', false)
+            ->assertSee('aria-label="Adjuntar imagen"', false)
+            ->assertSee('aria-label="Dictar"', false)
+            ->assertDontSee('Cargar', false)
+            ->assertDontSee('name="context_ids[]"', false);
     }
 
-    public function test_an_uploaded_image_is_rejected_without_calling_the_model(): void
+    public function test_an_uploaded_image_sends_the_read_text_to_the_model(): void
+    {
+        Http::preventStrayRequests();
+        $captured = null;
+
+        Http::fake(function ($request) use (&$captured) {
+            $this->assertStringStartsWith('http://127.0.0.1:11434/', $request->url());
+
+            if (str_ends_with($request->url(), '/api/chat')) {
+                $captured = json_encode($request->data());
+
+                return Http::response([
+                    'message' => ['content' => 'No veo la imagen.'],
+                ]);
+            }
+
+            return Http::response(['models' => []]);
+        });
+
+        $this->post('/c', [
+            'prompt' => 'Organiza estos nombres de la A a la Z.',
+            'image' => $this->namesImage(),
+        ])->assertRedirect();
+
+        $conversation = Conversation::query()->first();
+        $this->assertNotNull($conversation);
+        $message = $conversation->messages()->where('role', 'user')->first();
+        $this->assertNotNull($message);
+        $this->assertIsString($message->image_path);
+
+        $this->assertIsString($captured);
+        $this->assertStringContainsString('ANA', $captured);
+        $this->assertStringContainsString('LUIS', $captured);
+        $this->assertStringContainsString('MARTA', $captured);
+        $this->assertStringContainsString('Organiza estos nombres de la A a la Z.', $captured);
+        $this->assertStringNotContainsString('chat-images/', $captured);
+        $this->assertStringNotContainsString('iVBOR', $captured);
+
+        $this->get('/c/'.$conversation->id)
+            ->assertOk()
+            ->assertSee('Organiza estos nombres de la A a la Z.', false)
+            ->assertSee(route('chat.image', ['conversation' => $conversation->id, 'message' => $message->id], false), false);
+
+        $this->get(route('chat.image', ['conversation' => $conversation->id, 'message' => $message->id]))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+    }
+
+    public function test_a_file_that_is_not_an_image_is_rejected_without_calling_the_model(): void
     {
         Http::preventStrayRequests();
         Http::fake();
 
         $this->post('/c', [
             'prompt' => 'Describe esta captura.',
-            'image' => UploadedFile::fake()->image('captura.png'),
+            'image' => UploadedFile::fake()->create('notas.txt', 10, 'text/plain'),
         ])->assertRedirect()
             ->assertSessionHasErrors('image');
 
         Http::assertNothingSent();
         $this->assertDatabaseCount('messages', 0);
+    }
+
+    private function namesImage(): UploadedFile
+    {
+        $image = imagecreatetruecolor(480, 220);
+        $this->assertNotFalse($image);
+        $white = imagecolorallocate($image, 255, 255, 255);
+        $black = imagecolorallocate($image, 0, 0, 0);
+        imagefilledrectangle($image, 0, 0, 480, 220, $white);
+        $font = 'C:\\Windows\\Fonts\\arial.ttf';
+        imagettftext($image, 32, 0, 30, 60, $black, $font, 'ANA');
+        imagettftext($image, 32, 0, 30, 120, $black, $font, 'LUIS');
+        imagettftext($image, 32, 0, 30, 180, $black, $font, 'MARTA');
+        $path = sys_get_temp_dir().DIRECTORY_SEPARATOR.'wcodex-names.png';
+        imagepng($image, $path);
+
+        return new UploadedFile($path, 'nombres.png', 'image/png', null, true);
     }
 }

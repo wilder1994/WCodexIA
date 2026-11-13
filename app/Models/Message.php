@@ -20,6 +20,7 @@ class Message extends Model
         'role',
         'task',
         'content',
+        'image_path',
     ];
 
     /**
