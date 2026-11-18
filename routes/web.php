@@ -36,6 +36,9 @@ Route::middleware(['auth', 'role:superadmin'])->group(function (): void {
 Route::middleware(['auth', 'permission:chat'])->group(function (): void {
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
     Route::post('/c', [ChatController::class, 'store'])->name('chat.store');
+    Route::delete('/c/{conversation}', [ChatController::class, 'destroy'])
+        ->whereUuid('conversation')
+        ->name('chat.destroy');
     Route::get('/c/{conversation}', [ChatController::class, 'show'])
         ->whereUuid('conversation')
         ->name('chat.show');

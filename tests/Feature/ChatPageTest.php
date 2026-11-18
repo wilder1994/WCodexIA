@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 final class ChatPageTest extends TestCase
@@ -78,6 +80,38 @@ final class ChatPageTest extends TestCase
         $this->assertDatabaseCount('messages', 4);
     }
 
+    public function test_a_long_reply_is_streamed_and_stored_whole(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(function ($request) {
+            $this->assertStringStartsWith('http://127.0.0.1:11434/', $request->url());
+
+            if (str_ends_with($request->url(), '/api/tags')) {
+                return Http::response(['models' => []]);
+            }
+
+            $this->assertTrue((bool) ($request->data()['stream'] ?? false));
+            $body = json_encode(['message' => ['content' => 'Parte uno. ']], JSON_UNESCAPED_UNICODE)."\n"
+                .json_encode(['message' => ['content' => 'Parte dos, completa.'], 'done' => true], JSON_UNESCAPED_UNICODE)."\n";
+
+            return Http::response($body);
+        });
+
+        $response = $this->withHeader('Accept', 'application/x-ndjson')
+            ->post('/c', ['prompt' => str_repeat('Explica el módulo con detalle. ', 30)]);
+
+        $response->assertOk();
+        $stream = $response->streamedContent();
+        $this->assertStringContainsString('Parte uno.', $stream);
+        $this->assertStringContainsString('Parte dos, completa.', $stream);
+
+        $conversation = Conversation::query()->first();
+        $this->assertNotNull($conversation);
+        $this->get('/c/'.$conversation->id)
+            ->assertOk()
+            ->assertSee('Parte uno. Parte dos, completa.', false);
+    }
+
     public function test_a_new_chat_sends_prior_sessions_to_the_local_model(): void
     {
         Http::preventStrayRequests();
@@ -116,7 +150,7 @@ final class ChatPageTest extends TestCase
         $this->assertIsString($captured);
         $this->assertStringContainsString('Memoria de sesiones anteriores', $captured);
         $this->assertStringContainsString('Marca alfa para el repositorio de pedidos.', $captured);
-        $this->assertStringContainsString('Marca beta para los contratos.', $captured);
+        $this->assertStringNotContainsString('Marca beta para los contratos.', $captured);
 
         $this->get('/chat')
             ->assertOk()
@@ -188,6 +222,52 @@ final class ChatPageTest extends TestCase
 
         Http::assertNothingSent();
         $this->assertDatabaseCount('messages', 0);
+    }
+
+    public function test_a_conversation_can_be_deleted_from_the_list(): void
+    {
+        Http::fake([
+            'http://127.0.0.1:11434/*' => Http::response(['models' => []], 200),
+        ]);
+        Storage::fake('local');
+
+        $keep = new Conversation;
+        $keep->save();
+        $drop = new Conversation;
+        $drop->save();
+        Message::query()->create([
+            'conversation_id' => $keep->id,
+            'role' => 'user',
+            'content' => 'Conservar esta sesión',
+        ]);
+        Message::query()->create([
+            'conversation_id' => $drop->id,
+            'role' => 'user',
+            'content' => 'Borrar esta sesión',
+            'image_path' => 'chat-images/11111111-1111-1111-1111-111111111111.png',
+        ]);
+        Storage::disk('local')->put('chat-images/11111111-1111-1111-1111-111111111111.png', 'png');
+
+        $this->get('/chat')
+            ->assertOk()
+            ->assertSee('aria-label="Opciones de la conversación"', false)
+            ->assertSee('Eliminar', false)
+            ->assertSee('Borrar esta sesión', false);
+
+        $this->from('/c/'.$drop->id)
+            ->delete('/c/'.$drop->id)
+            ->assertRedirect('/chat');
+
+        $this->assertDatabaseMissing('conversations', ['id' => $drop->id]);
+        $this->assertDatabaseMissing('messages', ['conversation_id' => $drop->id]);
+        Storage::disk('local')->assertMissing('chat-images/11111111-1111-1111-1111-111111111111.png');
+
+        $this->get('/chat')
+            ->assertOk()
+            ->assertSee('Conservar esta sesión', false)
+            ->assertDontSee('Borrar esta sesión', false);
+
+        $this->delete('/c/'.$drop->id)->assertNotFound();
     }
 
     private function namesImage(): UploadedFile

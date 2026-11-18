@@ -1,6 +1,6 @@
 # Ollama en el VPS, aislado de Zentra
 
-Estado al 17 de noviembre de 2026. Ollama quedó instalado en el KVM 2 de Hostinger (`srv1970897`, `82.25.66.93`) sin la plantilla del panel y sin cambiar el código, el Nginx, las bases ni los servicios de Zentra.
+Estado al 18 de noviembre de 2026. Ollama quedó instalado en el KVM 2 de Hostinger (`srv1970897`, `82.25.66.93`) sin la plantilla del panel y sin cambiar el código, el Nginx, las bases ni los servicios de Zentra. El chat público de WCodexIA sí corre en este VPS, en Laravel, y llama a Ollama por `127.0.0.1:11434`.
 
 ## Estado actual
 
@@ -13,7 +13,9 @@ Estado al 17 de noviembre de 2026. Ollama quedó instalado en el KVM 2 de Hostin
 | Proxy | `http://127.0.0.1:11435`, otro proceso Nginx, no el de Zentra |
 | Token | `/etc/ollama-isolated/token` (modo 600). No está en este repositorio |
 | Modelo a usar | `qwen-coder-2g` (`qwen2.5-coder:3b`, `num_ctx` 2048) |
-| Memoria | `MemoryMax=2G`, `MemoryHigh=1800M`. En una respuesta de una palabra el servicio usó unos 1,8 GB |
+| Memoria | `MemoryMax=3G`, `MemoryHigh=2600M`. Con 2 GB el modelo de 2,1 GB quedaba frenado y `/api/chat` se cortaba a los 120 s |
+| Residencia | `OLLAMA_KEEP_ALIVE=-1`. `ollama ps` lo muestra cargado hasta que se detenga. El chat envía `keep_alive: -1` y no cambia `num_ctx`: otro contexto recarga el modelo |
+| Chat | `https://wcodexia.wcodex.cloud/chat`. Streaming NDJSON, tope 600 s, markdown escapado y panel fijo |
 | Reinicio | `Restart=always` en `ollama.service` y `ollama-proxy.service` |
 | Salud | `ollama-health.timer`, cada 60 segundos |
 
@@ -50,7 +52,7 @@ curl -sS http://127.0.0.1:11435/api/generate \
   -d '{"model":"qwen-coder-2g","prompt":"di ok","stream":false,"options":{"num_predict":8,"num_ctx":2048}}'
 ```
 
-WCodexIA corre en el PC, no en el VPS. No se abrió un puerto público. Para usarlo desde esta máquina hace falta un túnel, sin DNS:
+El chat publicado llama a `127.0.0.1:11434` desde PHP. No hace falta túnel para el sitio. Para hablar con el proxy desde el PC sigue haciendo falta un túnel, sin DNS:
 
 ```bash
 ssh -i %USERPROFILE%\.ssh\id_ed25519_decowandy_vps -N -L 11435:127.0.0.1:11435 root@82.25.66.93
@@ -79,3 +81,18 @@ El vhost de `wcodexia.wcodex.cloud` quedó partido. Zentra no se tocó.
 | Panel de versiones | Sigue en `127.0.0.1:8090`. Laravel lo muestra en `/versiones` |
 
 El certificado sigue siendo Let's Encrypt. `/.well-known/` se sirve desde el disco del sitio para la renovación. El código del panel está en `supervision-panel/README.md`. El afinado y la recolección pública están en `lora-job/README.md`: no cambian `qwen-coder-2g` y no escriben dentro de Zentra.
+
+## Chat publicado (18 nov 2026)
+
+Laravel está en `/home/wcodex-wcodexia/wcodexia`. El modelo del sitio sigue siendo `qwen-coder-2g`. No se hizo prueba de carga con varios usuarios.
+
+| Comportamiento | Dónde |
+| --- | --- |
+| El recuadro se vacía al enviar | `resources/views/chat/index.blade.php` |
+| La respuesta sale por fragmentos NDJSON y cURL entrega cada línea en cuanto llega | `OllamaProvider`, `ChatController` |
+| Tope de generación 600 s. En el vhost de WCodexIA, `fastcgi_read_timeout 600s`, `fastcgi_buffering off` y `gzip off` en PHP | `OLLAMA_TIMEOUT`, Nginx |
+| Solo se recuerdan sesiones pedidas en `context_ids[]`. No se añaden otras conversaciones solas | `SessionMemory` |
+| Menú de tres puntos y `DELETE /c/{uuid}` | panel y `ChatController::destroy` |
+| El panel no se mueve al hacer scroll en el hilo. Si la lista no cabe, el panel tiene scroll propio | CSS del chat |
+| Negrita, títulos, listas y código. El HTML del modelo se escapa antes | `MessageHtmlRenderer` |
+| El modelo queda residente | `OLLAMA_KEEP_ALIVE=-1`, `MemoryMax=3G`, `MemoryHigh=2600M` |

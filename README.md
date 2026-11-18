@@ -4,8 +4,11 @@ Asistente local de desarrollo. El código y las conversaciones se quedan en la m
 
 ## Qué incluye
 
-- Chat web en `/` con historial en MySQL. El recuadro de escritura admite texto, una imagen adjunta o pegada, y dictado del navegador. El audio no sale del navegador.
-- Memoria entre sesiones: hasta 3 sesiones anteriores entran como contexto, no como instrucciones. El panel lista cada sesión por sus primeras palabras. La interfaz ya no envía `context_ids[]`; el backend los sigue aceptando y, si no llegan, usa las sesiones recientes.
+- Chat web. En local, `/` abre el chat. En el VPS, `/` redirige a `/login` y el chat vive en `/chat`. El recuadro admite texto, una imagen adjunta o pegada, y dictado del navegador. El audio no sale del navegador. Enter envía y Mayús+Enter hace un salto de línea. El texto del recuadro se vacía en el momento del envío.
+- La respuesta llega por fragmentos NDJSON (`Accept: application/x-ndjson`) y se pinta mientras el modelo sigue generando. Al terminar, la página abre la conversación guardada.
+- El markdown del modelo se muestra formateado (negrita, títulos, listas y código). El HTML crudo se escapa antes de pintar, así que un `<script>` queda como texto.
+- Cada conversación del panel tiene un menú de tres puntos con Eliminar. `DELETE /c/{uuid}` borra la conversación, sus mensajes y la imagen adjunta. El panel queda fijo: el hilo hace scroll aparte y, si la lista no cabe, el panel tiene el suyo.
+- Memoria entre sesiones: solo entran las sesiones pedidas en `context_ids[]`, como dato y no como instrucciones. Si no se piden, no se adjunta ninguna. El panel lista cada sesión por sus primeras palabras.
 - Imagen local: se guarda en el equipo, se muestra en el hilo y Tesseract lee su texto. El modelo recibe ese texto, no los píxeles.
 - Modo agente en `/agent`: lee archivos de un directorio indicado, propone un diff unificado y solo escribe o ejecuta un comando después de aprobación.
 - API local con token para consultar políticas y pedir completados.
@@ -52,7 +55,15 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 ## Chat y memoria
 
-`DevelopmentAssistant` compone el prompt con la tarea `explain`, las últimas 10 vueltas de la sesión y el bloque de `SessionMemory`. Ese bloque lleva como máximo 3 sesiones (las marcadas con `context_ids[]` primero, luego las más recientes), 6 mensajes y 500 caracteres por mensaje. El texto guardado del usuario es el prompt ya redactado; el contexto de archivos y de memoria se envía al modelo y no se duplica como mensaje de usuario.
+`DevelopmentAssistant` compone el prompt con la tarea `explain`, las últimas 10 vueltas de la sesión y el bloque de `SessionMemory`. Ese bloque solo incluye los `context_ids[]` explícitos: como máximo 3 sesiones, 6 mensajes y 500 caracteres por mensaje. No se rellenan huecos con otras sesiones recientes, porque eso alargaba la primera frase. El texto guardado del usuario es el prompt ya redactado; el contexto de archivos y de memoria se envía al modelo y no se duplica como mensaje de usuario.
+
+`OllamaProvider` pide `stream: true` y `keep_alive: -1`. En producción el cuerpo se lee con cURL a medida que llegan las líneas NDJSON, y cada fragmento se escribe al navegador sin esperar al cierre. El tope de esa petición es `OLLAMA_TIMEOUT` (600 segundos). `MessageHtmlRenderer` escapa el HTML y después interpreta negrita, títulos, listas y cercas de código. La misma transformación corre en el navegador mientras la respuesta todavía está llegando.
+
+El panel lateral es una columna de la ventana, con scroll propio. El hilo del chat es el que se desplaza. Eliminar una conversación que está abierta vuelve a `/chat`.
+
+## Publicado
+
+El sitio público es `https://wcodexia.wcodex.cloud`. El modelo de ese servidor sigue siendo `qwen-coder-2g` y no se cambia el tag. Ollama lo mantiene cargado (`OLLAMA_KEEP_ALIVE=-1`) con `MemoryMax=3G` y `MemoryHigh=2600M`. El detalle del VPS está en `docs/README-OLLAMA-VPS.md`. No hay prueba de carga de varios usuarios en esta versión.
 
 El system prompt es fijo: el contenido del usuario, los archivos, la memoria y el texto leído de una imagen son datos, no instrucciones. Si la imagen no produjo texto, el prompt pide no inventar su contenido.
 

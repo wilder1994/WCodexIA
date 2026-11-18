@@ -16,6 +16,11 @@ interface ConversationRepository
     public function exists(string $id): bool;
 
     /**
+     * @return list<string>|null Image paths that belonged to the conversation, or null when it does not exist.
+     */
+    public function delete(string $id): ?array;
+
+    /**
      * @return list<ConversationSummary>
      */
     public function listRecent(int $limit = 40): array;

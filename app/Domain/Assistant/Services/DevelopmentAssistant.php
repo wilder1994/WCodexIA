@@ -37,6 +37,25 @@ final readonly class DevelopmentAssistant
 
     public function handle(DevelopmentRequest $request): DevelopmentResponse
     {
+        [$conversationId, $messages, $inbound] = $this->prepare($request);
+        $completion = $this->llm->complete(new CompletionRequest($messages));
+
+        return $this->finish($request, $conversationId, $inbound, $completion->content);
+    }
+
+    public function stream(DevelopmentRequest $request, callable $onDelta): DevelopmentResponse
+    {
+        [$conversationId, $messages, $inbound] = $this->prepare($request);
+        $content = $this->llm->stream(new CompletionRequest($messages), $onDelta);
+
+        return $this->finish($request, $conversationId, $inbound, $content);
+    }
+
+    /**
+     * @return array{0: string, 1: list<array{role: string, content: string}>, 2: PolicyDecision}
+     */
+    private function prepare(DevelopmentRequest $request): array
+    {
         if ($request->conversationId !== null && ! $this->conversations->exists($request->conversationId)) {
             throw new UnknownConversationException;
         }
@@ -76,9 +95,17 @@ final readonly class DevelopmentAssistant
             'content' => $inbound->content,
         ];
 
-        $completion = $this->llm->complete(new CompletionRequest($messages));
+        return [$conversationId, $messages, $inbound];
+    }
+
+    private function finish(
+        DevelopmentRequest $request,
+        string $conversationId,
+        PolicyDecision $inbound,
+        string $content,
+    ): DevelopmentResponse {
         $outbound = $this->policies->inspectOutbound(new PolicySubject(
-            $completion->content,
+            $content,
             $this->llm->isLocal(),
             $request->task,
         ));

@@ -19,17 +19,24 @@
 
         * { box-sizing: border-box; }
 
+        html { height: 100%; }
+
         body {
             margin: 0;
-            min-height: 100vh;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
             display: grid;
-            grid-template-columns: 220px 1fr;
+            grid-template-columns: 220px minmax(0, 1fr);
             background: var(--bg);
             color: var(--text);
             font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
         }
 
         aside {
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
             border-right: 1px solid var(--line);
             padding: 12px 10px;
             background: var(--panel);
@@ -80,8 +87,18 @@
             text-align: center;
         }
 
-        .session {
+        .session-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 2px;
             margin-top: 6px;
+        }
+
+        .session {
+            flex: 1;
+            min-width: 0;
+            margin-top: 0;
             padding: 5px 8px;
             border: 1px solid var(--line);
             border-radius: 6px;
@@ -93,13 +110,51 @@
             text-overflow: ellipsis;
         }
 
-        .session.active { border-color: var(--accent); }
+        .session-row.active .session { border-color: var(--accent); }
+
+        .session-more {
+            flex: 0 0 26px;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .session-more svg { width: 14px; height: 14px; display: block; margin: 0 auto; }
+
+        .session-more:hover,
+        .session-more[aria-expanded="true"] {
+            color: var(--text);
+            background: #243024;
+        }
+
+        .session-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            z-index: 8;
+            width: 148px;
+            margin: 0;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #1a2219;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+        }
+
+        .session-menu form { margin: 0; }
 
         main {
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
             min-width: 0;
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
         }
 
         header {
@@ -125,22 +180,69 @@
 
         .thread {
             flex: 1;
+            min-height: 0;
             overflow: auto;
             padding: 16px 16px 8px;
         }
 
         .bubble {
-            max-width: 720px;
+            width: fit-content;
+            max-width: min(720px, 100%);
             margin: 0 0 8px;
             padding: 8px 10px;
             border-radius: 8px;
-            white-space: pre-wrap;
+            text-align: left;
+            text-indent: 0;
+            white-space: normal;
             overflow-wrap: anywhere;
         }
 
+        .bubble p { margin: 0 0 8px; }
+
+        .bubble p:last-child,
+        .bubble ol:last-child,
+        .bubble ul:last-child,
+        .bubble pre:last-child,
+        .bubble h1:last-child,
+        .bubble h2:last-child,
+        .bubble h3:last-child { margin-bottom: 0; }
+
+        .bubble h1, .bubble h2, .bubble h3 {
+            margin: 0 0 8px;
+            font-size: 14px;
+            font-weight: 650;
+            line-height: 1.3;
+        }
+
+        .bubble ol, .bubble ul { margin: 0 0 8px; padding-left: 1.25em; }
+
+        .bubble li { margin: 2px 0; }
+
+        .bubble strong { font-weight: 650; }
+
+        .bubble code {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 12px;
+            background: #10160f;
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+
+        .bubble pre.code {
+            margin: 0 0 8px;
+            padding: 8px 10px;
+            overflow: auto;
+            white-space: pre;
+            background: #10160f;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+        }
+
+        .bubble pre.code code { padding: 0; background: transparent; }
+
         .bubble.user { margin-left: auto; background: var(--user); }
 
-        .bubble.assistant { background: var(--assistant); border: 1px solid var(--line); }
+        .bubble.assistant { margin-right: auto; background: var(--assistant); border: 1px solid var(--line); }
 
         .empty { color: var(--muted); }
 
@@ -249,12 +351,51 @@
 
         button[type="submit"]:hover { color: var(--accent); }
 
+        button.session-delete {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            width: 100%;
+            height: 36px;
+            margin: 0;
+            padding: 0 10px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: #e06c6c;
+            font: 13px/1 "Segoe UI", system-ui, sans-serif;
+            text-align: left;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        button.session-delete svg {
+            width: 16px;
+            height: 16px;
+            flex: 0 0 16px;
+            display: block;
+        }
+
+        button.session-delete:hover {
+            background: #3a2020;
+            color: #e06c6c;
+        }
+
         .error { color: #e7b2b2; font-size: 14px; }
 
         @media (max-width: 800px) {
-            body { grid-template-columns: 1fr; }
-            aside { border-right: 0; border-bottom: 1px solid var(--line); }
-            main { min-height: auto; }
+            body {
+                grid-template-columns: 1fr;
+                grid-template-rows: minmax(0, 42vh) minmax(0, 1fr);
+            }
+
+            aside {
+                border-right: 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            main { height: auto; }
         }
     </style>
 </head>
@@ -265,9 +406,22 @@
         <form method="post" action="{{ route('logout') }}">@csrf<button class="new-chat" type="submit">Salir</button></form>
         <a class="new-chat" href="{{ route('chat.index') }}">Nueva conversación</a>
         @forelse ($conversations as $conversation)
-            <a class="session {{ $activeId === $conversation->id ? 'active' : '' }}" href="{{ route('chat.show', $conversation->id) }}">
-                {{ $conversation->title }}
-            </a>
+            <div class="session-row {{ $activeId === $conversation->id ? 'active' : '' }}">
+                <a class="session" href="{{ route('chat.show', $conversation->id) }}">{{ $conversation->title }}</a>
+                <button class="session-more" type="button" aria-label="Opciones de la conversación" aria-expanded="false" aria-haspopup="menu">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="3" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="13" r="1.2" fill="currentColor"/></svg>
+                </button>
+                <div class="session-menu" role="menu" hidden>
+                    <form method="post" action="{{ route('chat.destroy', $conversation->id) }}">
+                        @csrf
+                        @method('DELETE')
+                        <button class="session-delete" type="submit" role="menuitem">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 7h15M9.5 7V4.5h5V7M7 7l1 13h8l1-13"/></svg>
+                            Eliminar
+                        </button>
+                    </form>
+                </div>
+            </div>
         @empty
             <p class="meta">Todavía no hay sesiones guardadas.</p>
         @endforelse
@@ -281,13 +435,9 @@
             </div>
         </header>
         <section class="thread" aria-live="polite">
+            @php($messageHtml = app(\App\Domain\Assistant\Services\MessageHtmlRenderer::class))
             @forelse ($messages as $message)
-                <article class="bubble {{ $message->role->value }}">
-                    @if ($message->hasImage && $activeId && $message->id)
-                        <img src="{{ route('chat.image', ['conversation' => $activeId, 'message' => $message->id]) }}" alt="Imagen adjunta">
-                    @endif
-                    {{ $message->content }}
-                </article>
+                <article class="bubble {{ $message->role->value }}">@if ($message->hasImage && $activeId && $message->id)<img src="{{ route('chat.image', ['conversation' => $activeId, 'message' => $message->id]) }}" alt="Imagen adjunta">@endif{!! $messageHtml->render($message->content) !!}</article>
             @empty
                 <p class="empty">Escribe un mensaje. La respuesta se genera en este servidor y la sesión queda guardada.</p>
             @endforelse
@@ -328,10 +478,188 @@
             @error('image')
                 <p class="error">{{ $message }}</p>
             @enderror
-            <p class="hint">La imagen se guarda en este equipo. El modelo recibe el texto leído, no los píxeles.</p>
+            <p class="hint" id="composer-status">Enter envía. Mayús+Enter hace un salto de línea. La imagen se guarda en este equipo. El modelo recibe el texto leído, no los píxeles.</p>
         </form>
         <script>
             const prompt = document.getElementById('prompt');
+            const composer = document.getElementById('composer');
+            const status = document.getElementById('composer-status');
+
+            prompt.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || event.shiftKey) {
+                    return;
+                }
+
+                event.preventDefault();
+                composer.requestSubmit();
+            });
+
+            const escapeChat = (value) => value
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;');
+
+            const renderChat = (source) => {
+                const blocks = [];
+                const text = source.replaceAll('\r\n', '\n').replaceAll('\r', '\n').replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => {
+                    const index = blocks.length;
+                    blocks.push('<pre class="code"><code>' + escapeChat(code.replace(/\n$/, '')) + '</code></pre>');
+                    return '\n@@B' + index + '@@\n';
+                });
+                const html = [];
+                let paragraph = [];
+                let list = '';
+                const flushParagraph = () => {
+                    if (paragraph.length === 0) return;
+                    html.push('<p>' + paragraph.join('<br>') + '</p>');
+                    paragraph = [];
+                };
+                const flushList = () => {
+                    if (list === '') return;
+                    html.push('</' + list + '>');
+                    list = '';
+                };
+                const inline = (line) => escapeChat(line)
+                    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+                    .replace(/\*\*(.+?)\*\*|__(.+?)__/g, '<strong>$1$2</strong>');
+
+                for (const line of text.split('\n')) {
+                    const trimmed = line.trim();
+                    const block = trimmed.match(/^@@B(\d+)@@$/);
+                    if (block) {
+                        flushParagraph();
+                        flushList();
+                        html.push(blocks[Number(block[1])]);
+                        continue;
+                    }
+                    if (trimmed === '') {
+                        flushParagraph();
+                        flushList();
+                        continue;
+                    }
+                    const formatted = inline(line);
+                    const heading = formatted.match(/^(#{1,3})\s+(.+)$/);
+                    if (heading) {
+                        flushParagraph();
+                        flushList();
+                        const level = heading[1].length;
+                        html.push('<h' + level + '>' + heading[2] + '</h' + level + '>');
+                        continue;
+                    }
+                    const ordered = formatted.match(/^\s*\d+\.\s+(.+)$/);
+                    if (ordered) {
+                        flushParagraph();
+                        if (list !== 'ol') {
+                            flushList();
+                            html.push('<ol>');
+                            list = 'ol';
+                        }
+                        html.push('<li>' + ordered[1] + '</li>');
+                        continue;
+                    }
+                    const bullet = formatted.match(/^\s*[-*]\s+(.+)$/);
+                    if (bullet) {
+                        flushParagraph();
+                        if (list !== 'ul') {
+                            flushList();
+                            html.push('<ul>');
+                            list = 'ul';
+                        }
+                        html.push('<li>' + bullet[1] + '</li>');
+                        continue;
+                    }
+                    flushList();
+                    paragraph.push(formatted);
+                }
+                flushParagraph();
+                flushList();
+                return html.join('');
+            };
+
+            composer.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const text = prompt.value;
+                const form = new FormData(composer);
+                const button = composer.querySelector('button[type="submit"]');
+                prompt.value = '';
+                button.disabled = true;
+                prompt.readOnly = true;
+                status.textContent = 'Generando la respuesta…';
+
+                const thread = document.querySelector('.thread');
+                const empty = thread.querySelector('.empty');
+                if (empty) {
+                    empty.remove();
+                }
+
+                const userBubble = document.createElement('article');
+                userBubble.className = 'bubble user';
+                userBubble.innerHTML = renderChat(text);
+                const reply = document.createElement('article');
+                reply.className = 'bubble assistant';
+                thread.append(userBubble, reply);
+                thread.scrollTop = thread.scrollHeight;
+
+                try {
+                    const response = await fetch(composer.action, {
+                        method: 'POST',
+                        body: form,
+                        headers: { 'Accept': 'application/x-ndjson' },
+                    });
+
+                    if (!response.ok || !response.body) {
+                        throw new Error('El envío no llegó al modelo.');
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let conversation = '';
+                    let replyText = '';
+
+                    while (true) {
+                        const chunk = await reader.read();
+                        if (chunk.done) {
+                            break;
+                        }
+
+                        buffer += decoder.decode(chunk.value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.trim() === '') {
+                                continue;
+                            }
+
+                            const payload = JSON.parse(line);
+                            if (payload.error) {
+                                throw new Error(payload.error);
+                            }
+                            if (payload.delta) {
+                                replyText += payload.delta;
+                                reply.innerHTML = renderChat(replyText);
+                                thread.scrollTop = thread.scrollHeight;
+                            }
+                            if (payload.conversation) {
+                                conversation = payload.conversation;
+                            }
+                        }
+                    }
+
+                    if (conversation !== '') {
+                        window.location.assign('/c/' + conversation);
+                    }
+                } catch (error) {
+                    if (prompt.value === '') {
+                        prompt.value = text;
+                    }
+                    button.disabled = false;
+                    prompt.readOnly = false;
+                    status.textContent = error instanceof Error ? error.message : 'No se pudo completar la respuesta.';
+                }
+            });
             const file = document.getElementById('image');
             const preview = document.querySelector('.paste-preview');
             const previewImage = preview.querySelector('img');
@@ -425,6 +753,33 @@
                     prompt.value = base === '' ? said.trim() : base + ' ' + said.trim();
                 });
             }
+
+            const closeSessionMenus = () => {
+                document.querySelectorAll('.session-menu').forEach((menu) => menu.setAttribute('hidden', ''));
+                document.querySelectorAll('.session-more').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+            };
+
+            document.querySelectorAll('.session-more').forEach((button) => {
+                button.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const menu = button.parentElement.querySelector('.session-menu');
+                    const willOpen = menu.hasAttribute('hidden');
+                    closeSessionMenus();
+
+                    if (willOpen) {
+                        menu.removeAttribute('hidden');
+                        button.setAttribute('aria-expanded', 'true');
+                    }
+                });
+            });
+
+            document.addEventListener('click', (event) => {
+                if (event.target.closest('.session-menu')) {
+                    return;
+                }
+
+                closeSessionMenus();
+            });
         </script>
     </main>
 </body>

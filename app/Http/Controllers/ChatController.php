@@ -18,6 +18,7 @@ use App\Infrastructure\Llm\LocalModelProbe;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -43,7 +44,7 @@ final class ChatController extends Controller
         );
     }
 
-    public function store(ChatMessageRequest $request, DevelopmentAssistant $assistant, ConversationRepository $conversations, LocalChatImageStore $images, ImageTextReader $reader): RedirectResponse
+    public function store(ChatMessageRequest $request, DevelopmentAssistant $assistant, ConversationRepository $conversations, LocalChatImageStore $images, ImageTextReader $reader): RedirectResponse|StreamedResponse
     {
         $imagePath = null;
 
@@ -69,13 +70,12 @@ final class ChatController extends Controller
             ? null
             : $reader->read(Storage::disk('local')->path($imagePath));
 
-        set_time_limit((int) config('wcodex.ollama.timeout') + 15);
+        set_time_limit((int) config('wcodex.ollama.timeout') + 30);
 
-        try {
-            $conversationId = $request->validated('conversation_id');
-            /** @var list<string> $contextIds */
-            $contextIds = $request->validated('context_ids', []);
-            $result = $assistant->handle(new DevelopmentRequest(
+        $conversationId = $request->validated('conversation_id');
+        /** @var list<string> $contextIds */
+        $contextIds = $request->validated('context_ids', []);
+        $developmentRequest = new DevelopmentRequest(
                 conversationId: is_string($conversationId) ? $conversationId : null,
                 task: DevelopmentTask::Explain,
                 prompt: (string) $request->validated('prompt'),
@@ -84,7 +84,14 @@ final class ChatController extends Controller
                 contextIds: array_values($contextIds),
                 imagePath: $imagePath,
                 imageText: $imageText,
-            ));
+        );
+
+        if ($request->headers->get('Accept') === 'application/x-ndjson') {
+            return $this->streamReply($assistant, $conversations, $images, $imagePath, $developmentRequest);
+        }
+
+        try {
+            $result = $assistant->handle($developmentRequest);
         } catch (PolicyDeniedException|LlmUnavailableException $exception) {
             if ($imagePath !== null && ! $conversations->holdsImage($imagePath)) {
                 $images->delete($imagePath);
@@ -96,6 +103,66 @@ final class ChatController extends Controller
         }
 
         return redirect()->route('chat.show', ['conversation' => $result->conversationId]);
+    }
+
+    public function destroy(string $conversation, ConversationRepository $conversations, LocalChatImageStore $images): RedirectResponse
+    {
+        $paths = $conversations->delete($conversation);
+
+        if ($paths === null) {
+            abort(404);
+        }
+
+        foreach ($paths as $path) {
+            if (! $conversations->holdsImage($path)) {
+                $images->delete($path);
+            }
+        }
+
+        if (str_contains(url()->previous(), '/c/'.$conversation)) {
+            return redirect()->route('chat.index');
+        }
+
+        return back();
+    }
+
+    private function streamReply(
+        DevelopmentAssistant $assistant,
+        ConversationRepository $conversations,
+        LocalChatImageStore $images,
+        ?string $imagePath,
+        DevelopmentRequest $developmentRequest,
+    ): StreamedResponse {
+        return response()->stream(function () use ($assistant, $conversations, $images, $imagePath, $developmentRequest): void {
+            ignore_user_abort(true);
+
+            $emit = static function (array $payload): void {
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE)."\n";
+
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+
+                flush();
+            };
+
+            try {
+                $result = $assistant->stream($developmentRequest, static function (string $delta) use ($emit): void {
+                    $emit(['delta' => $delta]);
+                });
+                $emit(['conversation' => $result->conversationId]);
+            } catch (PolicyDeniedException|LlmUnavailableException $exception) {
+                if ($imagePath !== null && ! $conversations->holdsImage($imagePath)) {
+                    $images->delete($imagePath);
+                }
+
+                $emit(['error' => $exception->getMessage()]);
+            }
+        }, 200, [
+            'Content-Type' => 'application/x-ndjson; charset=UTF-8',
+            'Cache-Control' => 'no-cache, no-store',
+            'X-Accel-Buffering' => 'no',
+        ]);
     }
 
     public function image(string $conversation, string $message, ConversationRepository $conversations, LocalChatImageStore $images): Response

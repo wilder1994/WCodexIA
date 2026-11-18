@@ -27,6 +27,26 @@ final class EloquentConversationRepository implements ConversationRepository
         return Conversation::query()->whereKey($id)->exists();
     }
 
+    public function delete(string $id): ?array
+    {
+        $conversation = Conversation::query()->find($id);
+
+        if (! $conversation instanceof Conversation) {
+            return null;
+        }
+
+        $paths = Message::query()
+            ->where('conversation_id', $id)
+            ->pluck('image_path')
+            ->filter(static fn (mixed $path): bool => is_string($path) && $path !== '')
+            ->values()
+            ->all();
+
+        $conversation->delete();
+
+        return array_values($paths);
+    }
+
     public function listRecent(int $limit = 40): array
     {
         $conversations = Conversation::query()

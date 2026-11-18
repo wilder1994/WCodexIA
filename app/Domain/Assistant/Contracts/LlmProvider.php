@@ -14,4 +14,6 @@ interface LlmProvider
     public function isLocal(): bool;
 
     public function complete(CompletionRequest $request): CompletionResult;
+
+    public function stream(CompletionRequest $request, callable $onDelta): string;
 }
