@@ -8,7 +8,7 @@ Cada versión tiene base, adaptador, fecha, estado y estas métricas:
 
 | Campo | Significado |
 | --- | --- |
-| `train_samples` | Relatos usados para afinar. Pueden salir de Zentra y de `external.jsonl` |
+| `train_samples` | Relatos públicos de `external.jsonl` usados para afinar |
 | `eval_samples` | Relatos apartados para evaluar, sin repetir los de entrenamiento |
 | `train_loss` | Pérdida del afinado LoRA |
 | `eval_loss` | Pérdida en la evaluación |
@@ -39,7 +39,7 @@ Ejemplo de alta:
     "eval_loss": 0.91,
     "score": 0.74
   },
-  "notes": "Ventana de reportes del observatorio."
+  "notes": "Relatos públicos etiquetados. Aprobar no carga el adaptador en el chat."
 }
 ```
 

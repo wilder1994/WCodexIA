@@ -5,7 +5,7 @@ El modelo base es qwen2.5-coder:3b, servido por Ollama como qwen-coder-2g.
 En este VPS de 8 GB un entrenamiento que reescriba esos pesos no cabe junto a
 Zentra. El trabajo hace otra cosa, medible y acotada:
 
-1. Lee el JSONL ya exportado (relatos redactados y su tipo).
+1. Lee solo el JSONL público. Los reportes de Zentra no entran.
 2. Saca un vector por relato con el GGUF congelado, en un proceso aparte.
 3. Entrena solo un adaptador de rango bajo que predice el tipo.
 4. Calcula pérdida y exactitud. Publica eso en el panel.
@@ -27,7 +27,6 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATASET = Path(os.environ.get("LORA_DATASET", "/var/lib/wcodexia-lora/dataset.jsonl"))
 EXTERNAL = Path(os.environ.get("LORA_EXTERNAL", "/var/lib/wcodexia-lora/external.jsonl"))
 STATE = Path(os.environ.get("LORA_STATE", "/var/lib/wcodexia-lora/state.json"))
 ADAPTER_DIR = Path(os.environ.get("LORA_ADAPTERS", "/var/lib/wcodexia-lora/adapters"))
@@ -60,12 +59,13 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def load_examples() -> list[dict]:
-    if not DATASET.is_file():
-        raise SystemExit(f"no está el dataset {DATASET}")
-    merged: dict[int, dict] = {}
-    for item in read_jsonl(DATASET) + read_jsonl(EXTERNAL):
-        merged.setdefault(item["id"], item)
-    examples = list(merged.values())
+    examples = read_jsonl(EXTERNAL)
+    minimum = EVAL_MIN + 2
+    if len(examples) < minimum:
+        raise SystemExit(
+            f"el entrenamiento público quedó en {len(examples)} relatos; "
+            f"hace falta al menos {minimum}. Los reportes de Zentra no se usan."
+        )
     examples.sort(key=lambda item: item["id"])
     return examples
 
@@ -94,8 +94,8 @@ def write_state(payload: dict) -> None:
 def split_examples(examples: list[dict]) -> tuple[list[dict], list[dict]]:
     """Separa train y evaluación sin repetir un relato.
 
-    Primero aparta un relato de cada tipo que tenga copia. Después completa
-    la evaluación hasta EVAL_MIN, aunque algunos tipos queden solo ahí.
+    Cada tipo que entra en la evaluación conserva al menos una copia
+    en el entrenamiento. Un tipo con un solo relato no se evalúa.
     """
     by_type: dict[str, list[dict]] = {}
     for example in examples:
@@ -110,21 +110,13 @@ def split_examples(examples: list[dict]) -> tuple[list[dict], list[dict]]:
         else:
             train.extend(ordered)
 
-    def move_until(candidates: list[dict]) -> None:
-        for item in candidates:
-            if len(evaluate) >= EVAL_MIN or len(train) <= 2:
-                return
-            train.remove(item)
-            evaluate.append(item)
-
-    duplicated = [
-        item
-        for item in sorted(train, key=lambda item: item["id"], reverse=True)
-        if sum(1 for other in train if other["type"] == item["type"]) >= 2
-    ]
-    move_until(duplicated)
-    if len(evaluate) < EVAL_MIN:
-        move_until(sorted(train, key=lambda item: item["id"], reverse=True))
+    for item in sorted(train, key=lambda item: item["id"], reverse=True):
+        if len(evaluate) >= EVAL_MIN or len(train) <= 2:
+            break
+        if sum(1 for other in train if other["type"] == item["type"]) < 2:
+            continue
+        train.remove(item)
+        evaluate.append(item)
     train.sort(key=lambda item: item["id"])
     evaluate.sort(key=lambda item: item["id"])
     train_ids = {item["id"] for item in train}
@@ -318,7 +310,9 @@ def main() -> None:
     train, evaluate = split_examples(examples)
     if len(train) < 2 or len(evaluate) < 1:
         raise SystemExit(f"no hay suficientes relatos: train={len(train)} eval={len(evaluate)}")
-    classes = sorted({item["type"] for item in train + evaluate})
+    train_types = {item["type"] for item in train}
+    evaluate = [item for item in evaluate if item["type"] in train_types]
+    classes = sorted(train_types)
     index = {label: position for position, label in enumerate(classes)}
     if not evaluate:
         raise SystemExit("el conjunto de evaluación quedó vacío")
@@ -353,7 +347,8 @@ def main() -> None:
     )
     notes = (
         f"Adaptador LoRA de rango {RANK} sobre vectores del GGUF congelado. "
-        f"Evaluación de {len(evaluate)} relatos, sin solaparse con el entrenamiento. "
+        f"Evaluación de {len(evaluate)} relatos, sin solaparse con el entrenamiento "
+        "y con cada tipo también presente en el entrenamiento. "
         "Ollama sigue sirviendo qwen-coder-2g. "
         f"Pérdida de evaluación inicial {trained['initial_eval_loss']:.4f}, "
         f"final {trained['eval_loss']:.4f}."

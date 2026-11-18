@@ -442,6 +442,17 @@
                 <p class="empty">Escribe un mensaje. La respuesta se genera en este servidor y la sesión queda guardada.</p>
             @endforelse
         </section>
+        <script>
+            history.scrollRestoration = 'manual';
+            const pinThread = () => {
+                const thread = document.querySelector('.thread');
+                if (thread) {
+                    thread.scrollTop = thread.scrollHeight;
+                }
+            };
+            pinThread();
+            window.addEventListener('load', pinThread);
+        </script>
         <form id="composer" class="composer" method="post" action="{{ route('chat.store') }}" enctype="multipart/form-data">
             @csrf
             @if ($activeId)
@@ -582,10 +593,21 @@
                 const text = prompt.value;
                 const form = new FormData(composer);
                 const button = composer.querySelector('button[type="submit"]');
+                const imageInput = document.getElementById('image');
+                const previewBox = document.querySelector('.paste-preview');
+                const previewImg = previewBox.querySelector('img');
+                const imageFile = imageInput.files[0] || null;
+                const imageUrl = !previewBox.hidden && previewImg.getAttribute('src') ? previewImg.getAttribute('src') : '';
                 prompt.value = '';
+                if (imageFile) {
+                    imageInput.value = '';
+                    previewBox.hidden = true;
+                    previewImg.removeAttribute('src');
+                    previewUrl = '';
+                }
                 button.disabled = true;
                 prompt.readOnly = true;
-                status.textContent = 'Generando la respuesta…';
+                status.textContent = imageFile ? 'Leyendo la imagen…' : 'Generando la respuesta…';
 
                 const thread = document.querySelector('.thread');
                 const empty = thread.querySelector('.empty');
@@ -595,7 +617,13 @@
 
                 const userBubble = document.createElement('article');
                 userBubble.className = 'bubble user';
-                userBubble.innerHTML = renderChat(text);
+                if (imageUrl !== '') {
+                    const sentImage = document.createElement('img');
+                    sentImage.src = imageUrl;
+                    sentImage.alt = 'Imagen adjunta';
+                    userBubble.append(sentImage);
+                }
+                userBubble.insertAdjacentHTML('beforeend', renderChat(text));
                 const reply = document.createElement('article');
                 reply.className = 'bubble assistant';
                 thread.append(userBubble, reply);
@@ -641,6 +669,7 @@
                                 replyText += payload.delta;
                                 reply.innerHTML = renderChat(replyText);
                                 thread.scrollTop = thread.scrollHeight;
+                                status.textContent = 'Generando la respuesta…';
                             }
                             if (payload.conversation) {
                                 conversation = payload.conversation;
@@ -649,11 +678,15 @@
                     }
 
                     if (conversation !== '') {
+                        history.scrollRestoration = 'manual';
                         window.location.assign('/c/' + conversation);
                     }
                 } catch (error) {
                     if (prompt.value === '') {
                         prompt.value = text;
+                    }
+                    if (imageFile) {
+                        showFile(imageFile);
                     }
                     button.disabled = false;
                     prompt.readOnly = false;

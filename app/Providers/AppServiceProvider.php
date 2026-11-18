@@ -8,6 +8,7 @@ use App\Domain\Assistant\Contracts\AuditRepository;
 use App\Domain\Assistant\Contracts\ConversationRepository;
 use App\Domain\Assistant\Contracts\ImageTextReader;
 use App\Domain\Assistant\Contracts\LlmProvider;
+use App\Domain\Assistant\Contracts\PublicFactSource;
 use App\Domain\Assistant\Services\DevelopmentAssistant;
 use App\Domain\Assistant\Services\SessionMemory;
 use App\Domain\Assistant\Services\SystemPromptFactory;
@@ -21,6 +22,7 @@ use App\Domain\Security\Services\PolicyCatalog;
 use App\Domain\Security\Services\PolicyEngine;
 use App\Infrastructure\Chat\TesseractImageTextReader;
 use App\Infrastructure\Llm\OllamaProvider;
+use App\Infrastructure\Web\DuckDuckGoPublicFactLookup;
 use App\Infrastructure\Persistence\EloquentAuditRepository;
 use App\Infrastructure\Persistence\EloquentConversationRepository;
 use App\Infrastructure\Process\HostEnvironment;
@@ -48,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
 
             return new TesseractImageTextReader($binary, $tessdata, $languages);
         });
+
+        $this->app->singleton(PublicFactSource::class, DuckDuckGoPublicFactLookup::class);
 
         $this->app->singleton(LlmProvider::class, function (): LlmProvider {
             return new OllamaProvider(
@@ -115,6 +119,7 @@ class AppServiceProvider extends ServiceProvider
                 audits: $app->make(AuditRepository::class),
                 prompts: $app->make(SystemPromptFactory::class),
                 memory: $app->make(SessionMemory::class),
+                facts: $app->make(PublicFactSource::class),
                 historyLimit: (int) config('wcodex.history_limit'),
             );
         });
@@ -157,9 +162,17 @@ class AppServiceProvider extends ServiceProvider
             return $configured;
         }
 
-        $installed = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe';
+        foreach ([
+            'C:\\Program Files\\Tesseract-OCR\\tesseract.exe',
+            '/usr/bin/tesseract',
+            '/usr/local/bin/tesseract',
+        ] as $installed) {
+            if (is_file($installed)) {
+                return $installed;
+            }
+        }
 
-        return is_file($installed) ? $installed : 'tesseract';
+        return '';
     }
 
     private function tessdataDirectory(string $binary): string
@@ -180,8 +193,24 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        $beside = dirname($binary).DIRECTORY_SEPARATOR.'tessdata';
+        if ($binary !== '' && is_file($binary)) {
+            $beside = dirname($binary).DIRECTORY_SEPARATOR.'tessdata';
 
-        return $beside;
+            if (is_file($beside.DIRECTORY_SEPARATOR.'eng.traineddata')) {
+                return $beside;
+            }
+        }
+
+        foreach ([
+            '/usr/share/tesseract-ocr/5/tessdata',
+            '/usr/share/tesseract-ocr/4.00/tessdata',
+            '/usr/share/tessdata',
+        ] as $system) {
+            if (is_file($system.'/eng.traineddata')) {
+                return $system;
+            }
+        }
+
+        return '';
     }
 }

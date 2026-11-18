@@ -12,14 +12,14 @@ Estado al 18 de noviembre de 2026. Ollama quedó instalado en el KVM 2 de Hostin
 | API directa | `http://127.0.0.1:11434` |
 | Proxy | `http://127.0.0.1:11435`, otro proceso Nginx, no el de Zentra |
 | Token | `/etc/ollama-isolated/token` (modo 600). No está en este repositorio |
-| Modelo a usar | `qwen-coder-2g` (`qwen2.5-coder:3b`, `num_ctx` 2048) |
+| Modelo a usar | `wcodex-3b` (`qwen2.5:3b`, `num_ctx` 2048). `qwen-coder-2g` sigue instalado para los vectores del entrenamiento |
 | Memoria | `MemoryMax=3G`, `MemoryHigh=2600M`. Con 2 GB el modelo de 2,1 GB quedaba frenado y `/api/chat` se cortaba a los 120 s |
 | Residencia | `OLLAMA_KEEP_ALIVE=-1`. `ollama ps` lo muestra cargado hasta que se detenga. El chat envía `keep_alive: -1` y no cambia `num_ctx`: otro contexto recarga el modelo |
 | Chat | `https://wcodexia.wcodex.cloud/chat`. Streaming NDJSON, tope 600 s, markdown escapado y panel fijo |
 | Reinicio | `Restart=always` en `ollama.service` y `ollama-proxy.service` |
 | Salud | `ollama-health.timer`, cada 60 segundos |
 
-Una prueba local devolvió `Ok` con el modelo `qwen-coder-2g`. Sin token, el proxy responde 401. `GET /health` en el proxy responde 200 y no pide token.
+Una prueba del proxy respondió con el modelo cargado. Sin token, el proxy responde 401. `GET /health` en el proxy responde 200 y no pide token. El chat publicado usa `wcodex-3b`.
 
 ## Qué no se tocó
 
@@ -49,7 +49,7 @@ Desde el propio VPS, Zentra puede usar el proxy sin salir a internet:
 curl -sS http://127.0.0.1:11435/api/generate \
   -H "Authorization: Bearer $(cat /etc/ollama-isolated/token)" \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen-coder-2g","prompt":"di ok","stream":false,"options":{"num_predict":8,"num_ctx":2048}}'
+  -d '{"model":"wcodex-3b","prompt":"di ok","stream":false,"keep_alive":-1,"options":{"num_predict":8}}'
 ```
 
 El chat publicado llama a `127.0.0.1:11434` desde PHP. No hace falta túnel para el sitio. Para hablar con el proxy desde el PC sigue haciendo falta un túnel, sin DNS:
@@ -80,11 +80,11 @@ El vhost de `wcodexia.wcodex.cloud` quedó partido. Zentra no se tocó.
 | `https://wcodexia.wcodex.cloud/ollama/` | Proxy de Ollama, `127.0.0.1:11435` |
 | Panel de versiones | Sigue en `127.0.0.1:8090`. Laravel lo muestra en `/versiones` |
 
-El certificado sigue siendo Let's Encrypt. `/.well-known/` se sirve desde el disco del sitio para la renovación. El código del panel está en `supervision-panel/README.md`. El afinado y la recolección pública están en `lora-job/README.md`: no cambian `qwen-coder-2g` y no escriben dentro de Zentra.
+El certificado sigue siendo Let's Encrypt. `/.well-known/` se sirve desde el disco del sitio para la renovación. El código del panel está en `supervision-panel/README.md`. El afinado y la recolección pública están en `lora-job/README.md`: no cambian `wcodex-3b` y no escriben dentro de Zentra. Los vectores del clasificador salen del GGUF de `qwen-coder-2g`, que sigue instalado.
 
 ## Chat publicado (18 nov 2026)
 
-Laravel está en `/home/wcodex-wcodexia/wcodexia`. El modelo del sitio sigue siendo `qwen-coder-2g`. No se hizo prueba de carga con varios usuarios.
+Laravel está en `/home/wcodex-wcodexia/wcodexia`. El modelo del sitio es `wcodex-3b` (`/var/lib/ollama/Modelfile.wcodex3b`, `FROM qwen2.5:3b`, `num_ctx 2048`). No se hizo prueba de carga con varios usuarios. Si la pregunta pide un dato, el chat lee una página pública, descarta redes y videos, y entrega hasta 1800 caracteres con la línea `Fuente`.
 
 | Comportamiento | Dónde |
 | --- | --- |

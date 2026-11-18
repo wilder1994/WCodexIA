@@ -1,10 +1,8 @@
 #!/bin/bash
-# Exporta relatos, saca vectores del GGUF congelado y publica la versión.
-# No recarga modelos en Ollama y no escribe dentro de Zentra.
+# Saca vectores del GGUF congelado y publica la versión.
+# Lee solo relatos públicos. No exporta ni lee Zentra. No recarga el servicio de Ollama.
 set -euo pipefail
 
-export ZENTRA_ROOT="${ZENTRA_ROOT:-/home/wcodex-zentra/htdocs/zentra.wcodex.cloud}"
-export LORA_DATASET="${LORA_DATASET:-/var/lib/wcodexia-lora/dataset.jsonl}"
 export LORA_STATE="${LORA_STATE:-/var/lib/wcodexia-lora/state.json}"
 export LORA_ADAPTERS="${LORA_ADAPTERS:-/var/lib/wcodexia-lora/adapters}"
 export PANEL_URL="${PANEL_URL:-http://127.0.0.1:8090/api/versions}"
@@ -30,10 +28,13 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# El entrenamiento lee solo /var/lib/wcodexia-lora/external.jsonl.
+# No exporta ni lee el observatorio de Zentra.
+# Si hay clave de Gemini, corrige las etiquetas antes de entrenar.
 install -d -o wcodexia-lora -g wcodexia-lora -m 2770 /var/lib/wcodexia-lora/adapters
-runuser -u wcodex-zentra -- /usr/bin/php8.3 /opt/wcodexia-lora/export_reports.php
-chown wcodexia-lora:wcodexia-lora "${LORA_DATASET}"
-chmod 660 "${LORA_DATASET}"
+if [ -f /var/lib/wcodexia-lora/gemini.env ]; then
+  runuser -u wcodexia-lora -- /usr/bin/python3 /opt/wcodexia-lora/label_gemini.py || echo "etiquetado Gemini omitido"
+fi
 
 if [ ! -x "${LLAMA_SERVER}" ]; then
   echo "falta ${LLAMA_SERVER}" >&2
@@ -45,6 +46,7 @@ fi
 
 # Suelta el modelo de la API para no tener dos copias en RAM. El servicio sigue activo.
 ollama stop qwen-coder-2g >/dev/null 2>&1 || true
+ollama stop wcodex-3b >/dev/null 2>&1 || true
 
 "${LLAMA_SERVER}" \
   -m "${GGUF}" \

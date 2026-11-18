@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Descarga relatos públicos y los suma al entrenamiento.
 
-Lee Wikipedia en español y el RSS de BBC Mundo. No toca Zentra ni el
-dataset que exporta el observatorio. Escribe solo external.jsonl.
+Lee noticias públicas ya separadas por tipo y extractos de la Wikipedia
+en español. No lee Zentra ni el export del observatorio. Escribe solo
+external.jsonl. El tipo lo pone la fuente, no un relato de Zentra.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -24,11 +26,58 @@ LOCK = Path(os.environ.get("LORA_INGEST_LOCK", "/var/lib/wcodexia-lora/ingest.lo
 USER_AGENT = "WCodexIA-LoRA/1.0 (https://wcodexia.wcodex.cloud)"
 WIKI = "https://es.wikipedia.org/w/api.php"
 RSS = "https://feeds.bbci.co.uk/mundo/rss.xml"
+GOOGLE_NEWS = "https://news.google.com/rss/search"
+TYPED_QUERIES = (
+    ("hurto", "hurto OR robo"),
+    ("hurto", "robo a mano armada OR hurto de celular"),
+    ("hurto", "fleteo OR cosquilleo"),
+    ("riña", "riña OR pelea"),
+    ("riña", "riña callejera OR pelea callejera"),
+    ("riña", "lesiones personales pelea"),
+    ("amenaza", "amenaza de muerte"),
+    ("amenaza", "intimidación OR amenaza contra testigo"),
+    ("extorsión", "extorsión OR llamada extorsiva"),
+    ("extorsión", "cobro de vacuna OR extorsión telefónica"),
+    ("homicidio", "homicidio OR asesinado"),
+    ("homicidio", "sicariato OR masacre"),
+    ("secuestro", "secuestro OR privado de la libertad"),
+    ("secuestro", "secuestro extorsivo"),
+    ("vandalismo", "vandalismo OR daño en bien ajeno"),
+    ("vandalismo", "destrucción de bienes OR saqueo"),
+    ("incendio", "incendio estructural OR incendio en vivienda"),
+    ("incendio", "incendio de vehículo OR bomberos controlan incendio"),
+    ("desaparición", "persona desaparecida OR desaparición"),
+    ("desaparición", "familia busca desaparecido"),
+    ("arma", "incautación de armas OR porte ilegal de armas"),
+    ("arma", "disparos de arma de fuego"),
+    ("intrafamiliar", "violencia intrafamiliar OR violencia de pareja"),
+    ("intrafamiliar", "agresión intrafamiliar"),
+    ("disturbio", "disturbios OR desórdenes públicos"),
+    ("disturbio", "bloqueo violento OR enfrentamiento con la policía"),
+    ("invasión", "invasión de predio OR ocupación ilegal"),
+    ("invasión", "desalojo de invasión"),
+    ("contrabando", "contrabando OR mercancía de contrabando"),
+    ("contrabando", "incautación de mercancía OR contrabando de licor"),
+    ("ciberataque", "ciberataque OR ransomware"),
+    ("ciberataque", "ataque informático OR secuestro de datos"),
+    ("atentado", "atentado con explosivos OR carro bomba"),
+    ("atentado", "artefacto explosivo"),
+    ("accidente", "accidente de tránsito OR accidente de transito"),
+    ("accidente", "choque bus OR accidente de moto"),
+    ("accidente", "volcamiento OR atropello"),
+    ("fraude", "estafa OR fraude"),
+    ("fraude", "estafa bancaria OR phishing"),
+    ("fraude", "estafa digital OR pirámide"),
+    ("desastre", "inundación OR deslizamiento OR terremoto"),
+    ("desastre", "inundación Colombia"),
+    ("desastre", "deslizamiento OR ola invernal"),
+)
 ID_BASE = 1_000_000_000
 MIN_CHARS = 40
 MAX_CHARS = 400
-WIKI_TARGET = 12
-NEWS_TARGET = 12
+WIKI_TARGET = 24
+NEWS_TARGET = 30
+PER_TYPE = 12
 
 
 def fetch(url: str) -> bytes:
@@ -54,11 +103,17 @@ def stable_id(source_id: str) -> int:
     return ID_BASE + int(digest[:8], 16)
 
 
-def load_existing() -> tuple[list[dict], set[str], set[int]]:
+def identity(source_id: str) -> str:
+    parts = source_id.split(":", 2)
+    return parts[-1] if len(parts) == 3 else source_id
+
+
+def load_existing() -> tuple[list[dict], set[str], set[str], set[int]]:
     if not EXTERNAL.is_file():
-        return [], set(), set()
+        return [], set(), set(), set()
     rows = []
     source_ids: set[str] = set()
+    identities: set[str] = set()
     ids: set[int] = set()
     for line in EXTERNAL.read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -70,10 +125,11 @@ def load_existing() -> tuple[list[dict], set[str], set[int]]:
         source_id = str(row.get("source_id", "")).strip()
         if source_id:
             source_ids.add(source_id)
+            identities.add(identity(source_id))
         if row.get("id") is not None:
             ids.add(int(row["id"]))
         rows.append(row)
-    return rows, source_ids, ids
+    return rows, source_ids, identities, ids
 
 
 def wikipedia_stories() -> list[dict]:
@@ -110,30 +166,51 @@ def wikipedia_stories() -> list[dict]:
     return stories
 
 
-def news_stories() -> list[dict]:
-    root = ET.fromstring(fetch(RSS))
+def feed_stories(url: str, label: str, source_prefix: str, limit: int) -> list[dict]:
+    root = ET.fromstring(fetch(url))
     stories = []
-    for item in root.findall("./channel/item"):
+    for item in root.findall(".//item"):
         title = item.findtext("title") or ""
         description = item.findtext("description") or ""
         text = clean(f"{title}. {description}")
         if len(text) < MIN_CHARS:
             continue
         guid = (item.findtext("guid") or item.findtext("link") or title).strip()
-        stories.append({"source_id": f"bbc:{guid}", "type": "noticia", "text": text})
-        if len(stories) >= NEWS_TARGET:
+        stories.append({"source_id": f"{source_prefix}:{guid}", "type": label, "text": text})
+        if len(stories) >= limit:
             break
     return stories
 
 
-def remember(story: dict, rows: list[dict], source_ids: set[str], ids: set[int]) -> bool:
+def typed_news() -> tuple[list[dict], list[str]]:
+    stories = []
+    pending = []
+    for label, query in TYPED_QUERIES:
+        url = GOOGLE_NEWS + "?" + urllib.parse.urlencode(
+            {"q": query, "hl": "es-419", "gl": "CO", "ceid": "CO:es-419"}
+        )
+        try:
+            stories.extend(feed_stories(url, label, f"gnews:{label}", PER_TYPE))
+        except Exception as error:
+            pending.append(f"{label}: {error}")
+        time.sleep(3)
+    return stories, pending
+
+
+def news_stories() -> list[dict]:
+    return feed_stories(RSS, "noticia", "bbc", NEWS_TARGET)
+
+
+def remember(story: dict, rows: list[dict], source_ids: set[str], identities: set[str], ids: set[int]) -> bool:
     source_id = story["source_id"]
-    if source_id in source_ids:
+    marker = identity(source_id)
+    if source_id in source_ids or marker in identities:
         return False
     row_id = stable_id(source_id)
     if row_id in ids:
         return False
     source_ids.add(source_id)
+    identities.add(marker)
     ids.add(row_id)
     rows.append(
         {
@@ -166,34 +243,39 @@ def main() -> None:
         print("ya hay una recolección")
         return
 
-    rows, source_ids, ids = load_existing()
-    added = {"wikipedia": 0, "noticia": 0}
+    rows, source_ids, identities, ids = load_existing()
+    added: dict[str, int] = {label: 0 for label, _query in TYPED_QUERIES}
+    added["wikipedia"] = 0
+    added["noticia"] = 0
     pending = []
+    batches: list[list[dict]] = []
 
+    typed, typed_errors = typed_news()
+    pending.extend(typed_errors)
+    batches.append(typed)
     try:
-        wiki = wikipedia_stories()
+        batches.append(wikipedia_stories())
     except Exception as error:
-        wiki = []
         pending.append(f"wikipedia: {error}")
     try:
-        news = news_stories()
+        batches.append(news_stories())
     except Exception as error:
-        news = []
         pending.append(f"bbc: {error}")
 
-    for story in wiki + news:
-        if remember(story, rows, source_ids, ids):
-            added[story["type"]] += 1
+    for stories in batches:
+        for story in stories:
+            if remember(story, rows, source_ids, identities, ids):
+                added[story["type"]] = added.get(story["type"], 0) + 1
 
-    if added["wikipedia"] or added["noticia"]:
+    if any(added.values()):
         save(rows)
 
+    summary = " ".join(f"{label}={count}" for label, count in added.items())
     print(
-        f"guardados {added['wikipedia'] + added['noticia']} "
-        f"wikipedia={added['wikipedia']} noticia={added['noticia']} "
+        f"guardados {sum(added.values())} {summary} "
         f"total={len(rows)} pendientes={'; '.join(pending) if pending else 'ninguna'}"
     )
-    if not wiki and not news:
+    if not any(batches):
         raise SystemExit(1)
 
 

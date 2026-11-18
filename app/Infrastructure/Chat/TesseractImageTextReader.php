@@ -27,14 +27,47 @@ final readonly class TesseractImageTextReader implements ImageTextReader
         }
 
         $environment = (new HostEnvironment)->forCommand();
-        $environment['TESSDATA_PREFIX'] = $this->tessdata;
 
+        if ($this->tessdata !== '' && is_dir($this->tessdata)) {
+            $environment['TESSDATA_PREFIX'] = $this->tessdata;
+        }
+
+        $text = $this->recognize($target, $environment, $this->languages, '6');
+
+        if ($text === '') {
+            $sparse = $this->recognize($target, $environment, $this->languages, '11');
+
+            if (mb_strlen($sparse) > mb_strlen($text)) {
+                $text = $sparse;
+            }
+        }
+
+        if ($text === '' && str_contains($this->languages, '+')) {
+            $text = $this->recognize($target, $environment, 'eng', '6');
+        }
+
+        if ($text === '') {
+            return '';
+        }
+
+        if (mb_strlen($text) > $this->maxChars) {
+            $text = mb_substr($text, 0, $this->maxChars);
+        }
+
+        return $text;
+    }
+
+    /**
+     * @param  array<string, string>  $environment
+     */
+    private function recognize(string $target, array $environment, string $languages, string $pageMode): string
+    {
         $process = new Process(
-            [$this->binary, $target, 'stdout', '-l', $this->languages, '--psm', '6'],
-            null,
+            [$this->binary, $target, 'stdout', '-l', $languages, '--psm', $pageMode],
+            dirname($target),
             $environment,
             null,
-            20,
+            12,
         );
 
         try {
@@ -47,17 +80,7 @@ final readonly class TesseractImageTextReader implements ImageTextReader
             return '';
         }
 
-        $text = trim(str_replace(["\r\n", "\r"], "\n", $process->getOutput()));
-
-        if ($text === '') {
-            return '';
-        }
-
-        if (mb_strlen($text) > $this->maxChars) {
-            $text = mb_substr($text, 0, $this->maxChars);
-        }
-
-        return $text;
+        return trim(str_replace(["\r\n", "\r"], "\n", $process->getOutput()));
     }
 
     private function inside(string $root, string $target): bool
