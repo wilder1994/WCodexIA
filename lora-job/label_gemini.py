@@ -166,17 +166,23 @@ def save(rows: list[dict]) -> None:
 
 
 def main() -> None:
-    key = load_key()
-    if not key:
-        raise SystemExit(f"falta la clave en {KEY_FILE}")
     if not EXTERNAL.is_file():
         raise SystemExit(f"no está {EXTERNAL}")
 
     rows = read_rows()
+    pending = [row for row in rows if row.get("label_source") != "gemini"]
+    if not pending:
+        print(f"revisados={len(rows)} nuevos=0 marcados=0 cambiados=0")
+        return
+
+    key = load_key()
+    if not key:
+        raise SystemExit(f"falta la clave en {KEY_FILE}")
+
     allowed = set(TYPES)
     chosen: dict[int, str] = {}
-    for start in range(0, len(rows), BATCH):
-        batch = rows[start : start + BATCH]
+    for start in range(0, len(pending), BATCH):
+        batch = pending[start : start + BATCH]
         for item in ask(key, batch):
             if not isinstance(item, dict):
                 continue
@@ -187,19 +193,26 @@ def main() -> None:
         time.sleep(1)
 
     changed = 0
+    marked = 0
     for row in rows:
+        if row.get("label_source") == "gemini":
+            continue
         label = chosen.get(int(row["id"]))
-        if label and label != row.get("type"):
+        if not label:
+            continue
+        if label != row.get("type"):
             row["type"] = label
             changed += 1
-    if changed:
+        row["label_source"] = "gemini"
+        marked += 1
+    if marked:
         save(rows)
 
     counts: dict[str, int] = {}
     for row in rows:
         counts[str(row.get("type"))] = counts.get(str(row.get("type")), 0) + 1
     summary = " ".join(f"{label}={count}" for label, count in sorted(counts.items()))
-    print(f"revisados={len(rows)} cambiados={changed} {summary}")
+    print(f"revisados={len(rows)} nuevos={len(pending)} marcados={marked} cambiados={changed} {summary}")
 
 
 if __name__ == "__main__":

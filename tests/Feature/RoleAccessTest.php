@@ -51,7 +51,7 @@ final class RoleAccessTest extends TestCase
             ->assertSee('Versiones LoRA', false)
             ->assertSee(route('chat.index'), false);
 
-        $this->actingAs($user)->get('/chat')->assertOk()->assertSee('Asistente local', false);
+        $this->actingAs($user)->get('/chat')->assertOk()->assertSee('Asistente en el servidor', false);
         $this->actingAs($user)->get('/versiones')->assertOk()->assertSee('Versiones LoRA', false);
     }
 }

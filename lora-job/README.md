@@ -5,7 +5,7 @@ Entrena un adaptador con relatos públicos y publica las métricas en el panel. 
 ## Qué hace cada corrida
 
 1. No hay exportación de Zentra. `dataset.jsonl` puede seguir en disco, pero `train.py` no lo abre.
-2. Se descarga de memoria el modelo del chat y el alias de vectores (`ollama stop wcodex-3b` y `ollama stop qwen-coder-2g`), sin detener el servicio.
+2. Si el archivo público cambió desde la última corrida, se descarga de memoria el modelo del chat y el alias de vectores (`ollama stop wcodex-3b` y `ollama stop qwen-coder-2g`), sin detener el servicio. Si no cambió, la corrida termina y el chat sigue cargado. Gemini solo etiqueta los relatos nuevos.
 3. `llama-server` abre el GGUF de `qwen-coder-2g` en `127.0.0.1:11436`, solo para sacar vectores, y se cierra al terminar.
 4. `train.py` lee solo `external.jsonl`. Aparta al menos 20 relatos para evaluar, sin repetir ninguno del entrenamiento y sin evaluar un tipo que no quede también en el entrenamiento. Entrena 50 épocas con rango 16, tasa 0,15 y semilla 7. La cabeza lineal parte de cero: los únicos pesos que se mueven son las dos matrices de bajo rango. El GGUF no se reescribe.
 5. `POST /api/versions` en el panel (`127.0.0.1:8090`) con muestras, pérdida de entrenamiento, pérdida de evaluación y exactitud (`score`, de 0 a 1). La versión queda pendiente. Aprobar sigue sin desplegar nada.

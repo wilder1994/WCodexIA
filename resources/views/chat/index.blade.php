@@ -402,7 +402,7 @@
 <body>
     <aside>
         <h1>WCodexIA</h1>
-        <p class="meta">Asistente local · <a href="{{ route('versions.index') }}">Versiones</a> · <a href="{{ route('agent.index') }}">Agente</a></p>
+        <p class="meta">Asistente en el servidor · <a href="{{ route('versions.index') }}">Versiones</a> · <a href="{{ route('agent.index') }}">Agente</a></p>
         <form method="post" action="{{ route('logout') }}">@csrf<button class="new-chat" type="submit">Salir</button></form>
         <a class="new-chat" href="{{ route('chat.index') }}">Nueva conversación</a>
         @forelse ($conversations as $conversation)
@@ -431,7 +431,7 @@
             <div class="status">
                 <span class="dot {{ $modelOnline ? 'on' : '' }}"></span>
                 <strong>Wcodex IA</strong>
-                <div>{{ $modelOnline ? 'Modelo cargado en este equipo' : 'El modelo todavía no está cargado en este equipo' }}</div>
+                <div>{{ $modelOnline ? 'Modelo cargado en el servidor' : 'El modelo todavía no está cargado en el servidor' }}</div>
             </div>
         </header>
         <section class="thread" aria-live="polite">
@@ -489,7 +489,7 @@
             @error('image')
                 <p class="error">{{ $message }}</p>
             @enderror
-            <p class="hint" id="composer-status">Enter envía. Mayús+Enter hace un salto de línea. La imagen se guarda en este equipo. El modelo recibe el texto leído, no los píxeles.</p>
+            <p class="hint" id="composer-status">Enter envía. Mayús+Enter hace un salto de línea. La imagen se guarda en el servidor. El modelo recibe el texto leído, no los píxeles.</p>
         </form>
         <script>
             const prompt = document.getElementById('prompt');

@@ -23,7 +23,7 @@
         <p>Superadmin. Desde aquí pruebas el modelo y revisas las versiones.</p>
         <div class="cards">
             <a class="card" href="{{ route('versions.index') }}"><strong>Versiones LoRA</strong>Métricas, aprobar y rechazar.</a>
-            <a class="card" href="{{ route('chat.index') }}"><strong>Chat</strong>Habla con el modelo local.</a>
+            <a class="card" href="{{ route('chat.index') }}"><strong>Chat</strong>Habla con el modelo del servidor.</a>
             <a class="card" href="{{ route('users.index') }}"><strong>Usuarios</strong>Crear, editar y borrar cuentas.</a>
         </div>
         <form method="post" action="{{ route('logout') }}">

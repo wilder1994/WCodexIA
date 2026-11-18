@@ -36,6 +36,11 @@ if [ -f /var/lib/wcodexia-lora/gemini.env ]; then
   runuser -u wcodexia-lora -- /usr/bin/python3 /opt/wcodexia-lora/label_gemini.py || echo "etiquetado Gemini omitido"
 fi
 
+if runuser -u wcodexia-lora -- /usr/bin/python3 /opt/wcodexia-lora/train.py --unchanged; then
+  echo "dataset sin cambios; el chat sigue cargado"
+  exit 0
+fi
+
 if [ ! -x "${LLAMA_SERVER}" ]; then
   echo "falta ${LLAMA_SERVER}" >&2
   exit 1

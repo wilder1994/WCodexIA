@@ -304,6 +304,15 @@ def main() -> None:
         return
     examples = load_examples()
     digest = dataset_hash(examples)
+    if "--unchanged" in sys.argv:
+        if os.environ.get("LORA_FORCE") == "1":
+            print("forzado")
+            raise SystemExit(2)
+        if read_state().get("dataset_sha256") == digest:
+            print("dataset sin cambios")
+            raise SystemExit(0)
+        print("dataset con cambios")
+        raise SystemExit(2)
     if os.environ.get("LORA_FORCE") != "1" and read_state().get("dataset_sha256") == digest:
         print("dataset sin cambios; no se publica otra versión")
         return

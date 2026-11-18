@@ -22,7 +22,7 @@
         <p>Estas son las secciones habilitadas para tu cuenta.</p>
         <div class="cards">
             @if ($user->allows('chat'))
-                <a class="card" href="{{ route('chat.index') }}"><strong>Chat</strong>Habla con el modelo local.</a>
+                <a class="card" href="{{ route('chat.index') }}"><strong>Chat</strong>Habla con el modelo del servidor.</a>
             @endif
             @if ($user->allows('versions'))
                 <a class="card" href="{{ route('versions.index') }}"><strong>Versiones LoRA</strong>Métricas, aprobar y rechazar.</a>

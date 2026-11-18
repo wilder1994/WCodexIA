@@ -40,17 +40,31 @@ final readonly class DevelopmentAssistant
     public function handle(DevelopmentRequest $request): DevelopmentResponse
     {
         [$conversationId, $messages, $inbound] = $this->prepare($request);
+        $ready = $this->sourcedLines($inbound->content);
+
+        if ($ready !== '') {
+            return $this->finish($request, $conversationId, $inbound, $ready);
+        }
+
         $completion = $this->llm->complete(new CompletionRequest($messages));
 
-        return $this->finish($request, $conversationId, $inbound, $completion->content);
+        return $this->finish($request, $conversationId, $inbound, $this->cited($inbound->content, $completion->content));
     }
 
     public function stream(DevelopmentRequest $request, callable $onDelta): DevelopmentResponse
     {
         [$conversationId, $messages, $inbound] = $this->prepare($request);
+        $ready = $this->sourcedLines($inbound->content);
+
+        if ($ready !== '') {
+            $onDelta($ready);
+
+            return $this->finish($request, $conversationId, $inbound, $ready);
+        }
+
         $content = $this->llm->stream(new CompletionRequest($messages), $onDelta);
 
-        return $this->finish($request, $conversationId, $inbound, $content);
+        return $this->finish($request, $conversationId, $inbound, $this->cited($inbound->content, $content));
     }
 
     /**
@@ -85,8 +99,10 @@ final readonly class DevelopmentAssistant
             ['role' => 'system', 'content' => $this->prompts->make()],
         ];
 
-        foreach ($this->boundedHistory($history) as $message) {
-            $messages[] = $message;
+        if (! str_contains($inbound->content, 'Dato público con fuente')) {
+            foreach ($this->boundedHistory($history) as $message) {
+                $messages[] = $message;
+            }
         }
 
         $messages[] = [
@@ -95,6 +111,58 @@ final readonly class DevelopmentAssistant
         ];
 
         return [$conversationId, $messages, $inbound];
+    }
+
+    private function sourcedLines(string $inbound): string
+    {
+        if (substr_count($inbound, 'Fuente:') < 2) {
+            return '';
+        }
+
+        $lines = [];
+
+        foreach (preg_split("/\r?\n/", $inbound) ?: [] as $line) {
+            $line = trim($line);
+
+            if (str_starts_with($line, 'Fuente:')) {
+                $lines[] = $line;
+            }
+        }
+
+        return count($lines) > 1 ? implode("\n", $lines) : '';
+    }
+
+    private function cited(string $inbound, string $content): string
+    {
+        if (! str_contains($inbound, 'Dato público con fuente')) {
+            return $content;
+        }
+
+        $mentionsMorning = str_contains($content, 'de la mañana') || preg_match('/\ba\.?\s*m\.?\b/iu', $content) === 1;
+
+        if (preg_match('/\d{1,2}:\d{2} de la mañana hasta las \d{1,2}:\d{2} de la noche/u', $inbound, $hour) === 1
+            && ! $mentionsMorning) {
+            $content = preg_replace(
+                '/entre las \d{1,2}:\d{2} y las \d{1,2}:\d{2} de la noche/u',
+                $hour[0],
+                $content,
+            ) ?? $content;
+
+            if (! str_contains($content, 'de la mañana') && preg_match('/\ba\.?\s*m\.?\b/iu', $content) !== 1) {
+                $content = rtrim($content).' Horario: '.$hour[0].'.';
+            }
+        }
+
+        if (preg_match('/\d{1,2} de [a-záéíóú]+ de \d{4}/u', $inbound, $day) === 1 && ! str_contains($content, $day[0])) {
+            $content = rtrim($content).' Día: '.$day[0].'.';
+        }
+
+        if (preg_match('/Fuente:\s*([A-Za-z0-9.-]+)/', $inbound, $source) !== 1
+            || str_contains(mb_strtolower($content), mb_strtolower($source[1]))) {
+            return $content;
+        }
+
+        return rtrim($content).' Fuente: '.$source[1].'.';
     }
 
     private function finish(
@@ -215,7 +283,12 @@ final readonly class DevelopmentAssistant
         $public = $this->facts->lookup($request->prompt);
 
         if ($public !== '') {
-            $sections[] = "Dato público leído de internet. La línea Fuente es la página. Úsalo para responder. No inventes lo que no esté aquí:\n".$public;
+            $lead = substr_count($public, 'Fuente:') > 1
+                ? 'Dato público con fuente. Responde en español, usando solo este texto. Di cada cifra con el lugar, el periodo y la fuente que estén escritos. No agregues una cifra, un porcentaje, un año ni un lugar que no esté escrito:'
+                : 'Dato público con fuente. Responde en español, en una o dos frases, usando solo este texto. Menciona el lugar, el día, la hora y la cifra que estén escritos, y cierra con la fuente. No agregues un año, una hora, una fecha, un día ni una excepción que no esté escrita:';
+            $sections[] = $lead."\n".$public;
+        } elseif ($this->facts->applies($request->prompt)) {
+            $sections[] = 'No hay dato público. Di que no lo tienes. No des cifras, fechas, lugares, empresas ni ganadores.';
         }
 
         if ($request->imagePath !== null) {

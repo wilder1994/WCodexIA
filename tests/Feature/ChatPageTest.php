@@ -36,7 +36,7 @@ final class ChatPageTest extends TestCase
         $response->assertSee('accept="image/jpeg,image/png,image/webp,image/gif"', false);
         $response->assertSee('aria-label="Adjuntar imagen"', false);
         $response->assertSee('aria-label="Dictar"', false);
-        $response->assertSee('La imagen se guarda en este equipo. El modelo recibe el texto leído', false);
+        $response->assertSee('La imagen se guarda en el servidor. El modelo recibe el texto leído', false);
         $response->assertSee('El modelo todavía no está cargado', false);
     }
 

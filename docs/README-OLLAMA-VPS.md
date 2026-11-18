@@ -84,7 +84,7 @@ El certificado sigue siendo Let's Encrypt. `/.well-known/` se sirve desde el dis
 
 ## Chat publicado (18 nov 2026)
 
-Laravel está en `/home/wcodex-wcodexia/wcodexia`. El modelo del sitio es `wcodex-3b` (`/var/lib/ollama/Modelfile.wcodex3b`, `FROM qwen2.5:3b`, `num_ctx 2048`). No se hizo prueba de carga con varios usuarios. Si la pregunta pide un dato, el chat lee una página pública, descarta redes y videos, y entrega hasta 1800 caracteres con la línea `Fuente`.
+Laravel está en `/home/wcodex-wcodexia/wcodexia`. El modelo del sitio es `wcodex-3b` (`/var/lib/ollama/Modelfile.wcodex3b`, `FROM qwen2.5:3b`, `num_ctx 2048`). No se hizo prueba de carga con varios usuarios. Si la pregunta pide un dato o una cifra, el chat lee páginas públicas, descarta redes, videos y direcciones privadas, y cita la fuente. Una cifra larga abre hasta dos notas. Si hay dos fuentes, el chat muestra esas líneas sin pedir al modelo que las reescriba. El panel dice «Asistente en el servidor» y «Modelo cargado en el servidor». La corrida de las 20:20 UTC no descarga `wcodex-3b` cuando el archivo público no cambió.
 
 | Comportamiento | Dónde |
 | --- | --- |

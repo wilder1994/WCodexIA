@@ -1,6 +1,6 @@
 # WCodexIA
 
-Asistente de desarrollo. En el VPS el chat lo escribe `wcodex-3b` (Ollama, `qwen2.5:3b`, contexto 2048). Una pregunta de dato o un nombre corto puede leer una página pública. Un pedido de código, un saludo y el texto de una imagen no salen del servidor. Las conversaciones se guardan en la base de esta aplicación.
+Asistente de desarrollo. En el VPS el chat lo escribe `wcodex-3b` (Ollama, `qwen2.5:3b`, contexto 2048). Una pregunta de dato, un nombre corto o una cifra (aunque la frase sea larga) puede leer páginas públicas y citar la fuente. Un pedido de código, un saludo y el texto de una imagen no salen del servidor. Las conversaciones se guardan en la base de esta aplicación.
 
 El afinado es otro proceso. Clasifica relatos públicos y publica métricas en el panel. No cambia el modelo del chat y no lee Zentra.
 
@@ -12,7 +12,7 @@ El afinado es otro proceso. Clasifica relatos públicos y publica métricas en e
 - Cada conversación del panel tiene un menú de tres puntos con Eliminar. `DELETE /c/{uuid}` borra la conversación, sus mensajes y la imagen adjunta. El panel queda fijo: el hilo hace scroll aparte y, si la lista no cabe, el panel tiene el suyo.
 - Memoria entre sesiones: solo entran las sesiones pedidas en `context_ids[]`, como dato y no como instrucciones. Si no se piden, no se adjunta ninguna. El panel lista cada sesión por sus primeras palabras.
 - Imagen: se guarda en el disco de esta aplicación, se muestra en el hilo y Tesseract lee su texto. El modelo recibe ese texto, no los píxeles.
-- Dato público: si la pregunta pide un hecho o nombra algo en pocas palabras, se lee una página pública y se entrega al modelo con la fuente. Redes, videos y direcciones privadas no se leen.
+- Dato público: un hecho, un nombre de 2 a 8 palabras, o una cifra (pico y placa, estadística, delitos, homicidios, hurtos, extorsión, tasa, desempleo) abre la búsqueda aunque la frase pase de 8 palabras. Si el buscador no devuelve enlaces, se abren hasta dos notas. Se conserva la frase que trae el número, el periodo y el medio. Con dos fuentes, el chat muestra esas líneas tal como se leyeron. Wikipedia sigue para lo estable: definición, población, lugar y campeón. Si la pregunta pide un dato y no hay página, el modelo dice que no lo tiene. Redes, videos y direcciones privadas no se leen.
 - Modo agente en `/agent`: lee archivos de un directorio indicado, propone un diff unificado y solo escribe o ejecuta un comando después de aprobación.
 - API local con token para consultar políticas y pedir completados.
 - Políticas de seguridad aplicadas antes y después del modelo.
@@ -67,7 +67,7 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 ## Chat y memoria
 
-`DevelopmentAssistant` compone el prompt con la instrucción del usuario, sin envolverla como tarea. El historial conserva los mensajes más nuevos: cada uno se recorta a 900 caracteres y el bloque completo a 1800. `SessionMemory` solo incluye los `context_ids[]` explícitos: como máximo 3 sesiones, 6 mensajes y 500 caracteres por mensaje. Si la pregunta pide un dato, `DuckDuckGoPublicFactLookup` agrega el texto de una página pública y la línea `Fuente`. El texto leído de una imagen se recorta a 2500 caracteres. El texto guardado del usuario es el prompt ya redactado.
+`DevelopmentAssistant` compone el prompt con la instrucción del usuario, sin envolverla como tarea. El historial conserva los mensajes más nuevos: cada uno se recorta a 900 caracteres y el bloque completo a 1800. Cuando hay un dato público, ese historial no se envía, para que una respuesta anterior no cambie la fecha. `SessionMemory` solo incluye los `context_ids[]` explícitos: como máximo 3 sesiones, 6 mensajes y 500 caracteres por mensaje. Si la pregunta pide un dato, `DuckDuckGoPublicFactLookup` agrega el texto leído y la línea `Fuente`. Con más de una fuente, esas líneas son la respuesta y el modelo no las reescribe. El texto leído de una imagen se recorta a 2500 caracteres. El texto guardado del usuario es el prompt ya redactado.
 
 `OllamaProvider` pide `stream: true` y `keep_alive: -1`. En producción el cuerpo se lee con cURL a medida que llegan las líneas NDJSON, y cada fragmento se escribe al navegador sin esperar al cierre. El tope de esa petición es `OLLAMA_TIMEOUT` (600 segundos). `MessageHtmlRenderer` escapa el HTML y después interpreta negrita, títulos, listas y cercas de código. La misma transformación corre en el navegador mientras la respuesta todavía está llegando.
 
@@ -169,4 +169,4 @@ config/wcodex.php        token, Ollama, Tesseract, workspace y políticas
 php artisan test
 ```
 
-La suite cubre políticas, el límite del workspace, el chat (persistencia, memoria, texto leído de la imagen y ausencia del control de cargar sesiones), la lectura de páginas públicas (un pedido de código y un saludo no salen del servidor; una dirección privada no se lee), la API y el agente (diff antes de escribir, una inserción que no reescribe el archivo, comando bajo aprobación aunque el PATH heredado no traiga `php`, JSON entre cercas con el botón de aprobar habilitado). El detalle del VPS y del clasificador está en `docs/README-OLLAMA-VPS.md` y `lora-job/README.md`.
+La suite cubre políticas, el límite del workspace, el chat (persistencia, memoria, texto leído de la imagen y ausencia del control de cargar sesiones), la lectura de páginas públicas (un pedido de código y un saludo no salen del servidor; una dirección privada no se lee; una cifra larga conserva el número y el medio; el pico y placa lee la nota), la API y el agente (diff antes de escribir, una inserción que no reescribe el archivo, comando bajo aprobación aunque el PATH heredado no traiga `php`, JSON entre cercas con el botón de aprobar habilitado). El detalle del VPS y del clasificador está en `docs/README-OLLAMA-VPS.md` y `lora-job/README.md`.

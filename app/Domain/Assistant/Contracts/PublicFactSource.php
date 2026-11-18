@@ -7,4 +7,6 @@ namespace App\Domain\Assistant\Contracts;
 interface PublicFactSource
 {
     public function lookup(string $question): string;
+
+    public function applies(string $question): bool;
 }
