@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Conversation;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -14,13 +15,19 @@ final class ChatPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAs(User::factory()->create(['role' => 'superadmin']));
+    }
+
     public function test_the_chat_shows_an_enabled_image_slot(): void
     {
         Http::fake([
             'http://127.0.0.1:11434/*' => Http::response(['models' => []], 200),
         ]);
 
-        $response = $this->get('/');
+        $response = $this->get('/chat');
 
         $response->assertOk();
         $response->assertSee('name="image"', false);
@@ -64,7 +71,7 @@ final class ChatPageTest extends TestCase
             ->assertSee('Agrega la interfaz del contrato.', false)
             ->assertSee('Separa el contrato del repositorio concreto.', false);
 
-        $this->get('/')
+        $this->get('/chat')
             ->assertOk()
             ->assertSee('Diseña un repositorio para pedidos.', false);
 
@@ -111,7 +118,7 @@ final class ChatPageTest extends TestCase
         $this->assertStringContainsString('Marca alfa para el repositorio de pedidos.', $captured);
         $this->assertStringContainsString('Marca beta para los contratos.', $captured);
 
-        $this->get('/')
+        $this->get('/chat')
             ->assertOk()
             ->assertSee('Marca alfa para el repositorio de pedidos.', false)
             ->assertSee('aria-label="Adjuntar imagen"', false)

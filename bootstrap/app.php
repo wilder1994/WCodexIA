@@ -5,6 +5,8 @@ use App\Domain\Assistant\Exceptions\UnknownConversationException;
 use App\Domain\Security\Exceptions\PolicyDeniedException;
 use App\Domain\Security\Exceptions\WorkspaceBoundaryException;
 use App\Http\Middleware\EnsureApiToken;
+use App\Http\Middleware\EnsurePermission;
+use App\Http\Middleware\EnsureUserRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,8 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+        $middleware->redirectGuestsTo('/login');
         $middleware->alias([
             'wcodex.token' => EnsureApiToken::class,
+            'role' => EnsureUserRole::class,
+            'permission' => EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

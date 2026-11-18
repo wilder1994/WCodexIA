@@ -1,0 +1,11 @@
+[Unit]
+Description=Recolección de relatos públicos cada 4 horas
+
+[Timer]
+OnCalendar=*-*-* 00/4:05:00
+Persistent=true
+RandomizedDelaySec=3min
+Unit=wcodexia-lora-ingest.service
+
+[Install]
+WantedBy=timers.target

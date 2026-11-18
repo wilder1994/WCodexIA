@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 final class AgentFlowTest extends TestCase
 {
+    use RefreshDatabase;
+
     private string $root;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->actingAs(User::factory()->create(['role' => 'superadmin']));
 
         $this->root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'wcodex-agent-'.uniqid();
         mkdir($this->root);

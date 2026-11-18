@@ -1,0 +1,12 @@
+[Unit]
+Description=Recolección de relatos públicos para el LoRA de WCodexIA
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=wcodexia-lora
+Group=wcodexia-lora
+Nice=19
+TimeoutStartSec=3min
+ExecStart=/usr/bin/python3 /opt/wcodexia-lora/ingest.py

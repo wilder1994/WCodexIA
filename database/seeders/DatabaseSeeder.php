@@ -3,23 +3,43 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $accounts = [
+            [
+                'name' => 'Superadmin',
+                'email' => env('WCODEX_SUPERADMIN_EMAIL'),
+                'password' => env('WCODEX_SUPERADMIN_PASSWORD'),
+                'role' => 'superadmin',
+            ],
+            [
+                'name' => 'Admin',
+                'email' => env('WCODEX_ADMIN_EMAIL'),
+                'password' => env('WCODEX_ADMIN_PASSWORD'),
+                'role' => 'admin',
+            ],
+        ];
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        foreach ($accounts as $account) {
+            if (! is_string($account['email']) || $account['email'] === '') {
+                continue;
+            }
+            if (! is_string($account['password']) || $account['password'] === '') {
+                continue;
+            }
+
+            User::query()->updateOrCreate(
+                ['email' => $account['email']],
+                [
+                    'name' => $account['name'],
+                    'password' => $account['password'],
+                    'role' => $account['role'],
+                ],
+            );
+        }
     }
 }

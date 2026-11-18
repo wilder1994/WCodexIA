@@ -22,6 +22,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'can_chat',
+        'can_versions',
     ];
 
     /**
@@ -44,6 +47,21 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'can_chat' => 'boolean',
+            'can_versions' => 'boolean',
         ];
+    }
+
+    public function allows(string $permission): bool
+    {
+        if ($this->role === 'superadmin') {
+            return true;
+        }
+
+        return match ($permission) {
+            'chat' => (bool) $this->can_chat,
+            'versions' => (bool) $this->can_versions,
+            default => false,
+        };
     }
 }

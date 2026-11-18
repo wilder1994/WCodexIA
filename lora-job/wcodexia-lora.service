@@ -1,0 +1,12 @@
+[Unit]
+Description=Afinado LoRA de WCodexIA
+After=network.target ollama.service wcodexia-panel.service
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+MemoryMax=3500M
+OOMScoreAdjust=900
+TimeoutStartSec=30min
+ExecStart=/opt/wcodexia-lora/run.sh

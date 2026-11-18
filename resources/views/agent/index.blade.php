@@ -91,7 +91,7 @@
     <header>
         <div>
             <h1>WCodexIA · Agente</h1>
-            <p class="meta">{{ $model }} · nada se escribe ni se ejecuta sin aprobación</p>
+            <p class="meta">Wcodex IA · nada se escribe ni se ejecuta sin aprobación</p>
         </div>
         <a href="{{ route('chat.index') }}">Chat</a>
     </header>

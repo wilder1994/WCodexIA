@@ -1,0 +1,54 @@
+:root {
+  color-scheme: dark;
+  --bg: #121612;
+  --card: #1c241c;
+  --line: #2d3a2d;
+  --text: #e7f0e4;
+  --muted: #9aab96;
+  --ok: #8fdf9a;
+  --no: #f0a3a0;
+  --wait: #e6d39a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 16px/1.45 "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header, main { max-width: 920px; margin: 0 auto; padding: 24px; }
+header { padding-bottom: 0; }
+h1 { margin: 0 0 8px; font-size: 1.4rem; }
+header p, .notes, .meta { color: var(--muted); }
+.status { min-height: 1.2em; }
+
+.list { display: grid; gap: 16px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.card h2 { margin: 0; font-size: 1.1rem; }
+.head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.badge { font-size: 0.85rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.badge.pending { color: var(--wait); }
+.badge.approved { color: var(--ok); }
+.badge.rejected { color: var(--no); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 12px 0; }
+.metric { background: #141a14; border-radius: 8px; padding: 8px; }
+.metric span { display: block; color: var(--muted); font-size: 0.78rem; }
+.actions { display: flex; gap: 8px; }
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+button.approve { background: #245c32; color: white; }
+button.reject { background: #6b3030; color: white; }
+button:disabled { opacity: 0.5; cursor: wait; }

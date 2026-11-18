@@ -261,7 +261,8 @@
 <body>
     <aside>
         <h1>WCodexIA</h1>
-        <p class="meta">Asistente local · <a href="{{ route('agent.index') }}">Agente</a></p>
+        <p class="meta">Asistente local · <a href="{{ route('versions.index') }}">Versiones</a> · <a href="{{ route('agent.index') }}">Agente</a></p>
+        <form method="post" action="{{ route('logout') }}">@csrf<button class="new-chat" type="submit">Salir</button></form>
         <a class="new-chat" href="{{ route('chat.index') }}">Nueva conversación</a>
         @forelse ($conversations as $conversation)
             <a class="session {{ $activeId === $conversation->id ? 'active' : '' }}" href="{{ route('chat.show', $conversation->id) }}">
@@ -275,7 +276,7 @@
         <header>
             <div class="status">
                 <span class="dot {{ $modelOnline ? 'on' : '' }}"></span>
-                <strong>{{ $model }}</strong>
+                <strong>Wcodex IA</strong>
                 <div>{{ $modelOnline ? 'Modelo cargado en este equipo' : 'El modelo todavía no está cargado en este equipo' }}</div>
             </div>
         </header>
@@ -288,7 +289,7 @@
                     {{ $message->content }}
                 </article>
             @empty
-                <p class="empty">Escribe un mensaje. La respuesta se genera en este equipo y la sesión queda en MySQL.</p>
+                <p class="empty">Escribe un mensaje. La respuesta se genera en este servidor y la sesión queda guardada.</p>
             @endforelse
         </section>
         <form id="composer" class="composer" method="post" action="{{ route('chat.store') }}" enctype="multipart/form-data">

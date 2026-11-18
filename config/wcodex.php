@@ -16,6 +16,8 @@ return [
 
     'history_limit' => 10,
 
+    'panel_url' => env('WCODEX_PANEL_URL', 'http://127.0.0.1:8090'),
+
     'ollama' => [
         'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
         'model' => env('OLLAMA_MODEL', 'qwen2.5-coder:3b'),
